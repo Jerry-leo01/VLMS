@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Truck, Lock, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Car, Lock, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 import { normalizePlateNumber } from '@/lib/utils';
 
 export default function LoginPage() {
@@ -60,7 +60,7 @@ export default function LoginPage() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <div className="bg-navy-900 text-white p-3 rounded-2xl shadow-md">
-            <Truck className="w-8 h-8" />
+            <Car className="w-8 h-8" />
           </div>
         </div>
         <h2 className="mt-4 text-center text-2xl font-bold tracking-tight text-slate-900">

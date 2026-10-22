@@ -9,7 +9,7 @@ import { DailyLog, AnomalyAlert } from '@/types/database';
 import { formatCurrency, formatOdometer, formatDateTime, getBusinessDate } from '@/lib/utils';
 import {
   Users,
-  Truck,
+  Car,
   CheckCircle2,
   AlertTriangle,
   Fuel,

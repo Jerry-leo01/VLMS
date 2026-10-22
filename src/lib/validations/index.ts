@@ -3,17 +3,43 @@ import { normalizePlateNumber } from '../utils';
 
 export const RegistrationSchema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters'),
-  employeeId: z.string().optional(),
+  phoneNumber: z
+    .string()
+    .min(10, 'Please enter a valid phone number (at least 10 digits)')
+    .regex(/^[0-9+\s\-()]{10,20}$/, 'Invalid phone number format'),
   plateNumber: z
     .string()
     .min(3, 'Plate number must be at least 3 characters')
     .transform(normalizePlateNumber),
-  tomCardNumber: z.string().optional(),
-  officeId: z.string().uuid('Please select a valid office location'),
+  tomCardNumber: z
+    .string()
+    .refine((val) => !val || /^\d{6}$/.test(val.trim()), {
+      message: 'TOM Card number must be exactly 6 numeric digits (e.g. 804689)',
+    })
+    .optional(),
+  officeId: z.string().min(1, 'Please select a valid office location'),
+  carName: z.string().min(2, 'Car name is required (e.g. Toyota Corolla)'),
+  carModel: z.string().min(1, 'Car model is required (e.g. Corolla LE or 1.8L)'),
+  carYear: z.coerce
+    .number()
+    .min(1990, 'Car year must be 1990 or later')
+    .max(new Date().getFullYear() + 2, 'Car year cannot be in the distant future'),
+  requestedRole: z
+    .enum(['staff', 'department_head', 'fleet_manager', 'auditor', 'administrator'])
+    .default('staff'),
+  adminPasscode: z.string().optional(),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   privacyAccepted: z.boolean().refine((val) => val === true, {
     message: 'You must acknowledge and accept the privacy policy',
   }),
+}).superRefine((data, ctx) => {
+  if (data.requestedRole !== 'staff' && !data.adminPasscode) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Administrative authorization key is required for privileged roles',
+      path: ['adminPasscode'],
+    });
+  }
 });
 
 export const LoginSchema = z.object({

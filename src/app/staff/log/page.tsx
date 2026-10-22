@@ -10,7 +10,7 @@ import { LocationPicker } from '@/components/gps/LocationPicker';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { VehicleAssignment, Profile, DailyLog } from '@/types/database';
 import { getBusinessDate } from '@/lib/utils';
-import { Truck, CheckCircle2, AlertCircle, ArrowLeft, Loader2, Sparkles } from 'lucide-react';
+import { Car, CheckCircle2, AlertCircle, ArrowLeft, Loader2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
 export default function DailyLogSubmissionPage() {

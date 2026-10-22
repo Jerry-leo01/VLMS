@@ -12,7 +12,7 @@ import {
   Office,
   UserRole,
 } from '@/types/database';
-import { getBusinessDate } from '@/lib/utils';
+import { getBusinessDate, normalizePlateNumber } from '@/lib/utils';
 import { evaluateAnomalies } from '@/lib/anomaly-engine';
 
 // In-Memory store for development / demo mode when live DB is unconfigured
@@ -35,22 +35,57 @@ const store: DataStore = {
   offices: [
     {
       id: '11111111-1111-1111-1111-111111111111',
-      name: 'Lagos Corporate HQ',
-      address: 'Plot 12, Victoria Island, Lagos State, Nigeria',
+      name: 'Head Office',
+      address: 'Corporate Headquarters, Victoria Island, Lagos State, Nigeria',
       is_active: true,
       created_at: new Date().toISOString(),
     },
     {
       id: '22222222-2222-2222-2222-222222222222',
-      name: 'Abuja Regional Branch',
-      address: 'Plot 402, Central Business District, Abuja FCT, Nigeria',
+      name: 'Lagos Branch',
+      address: 'Ikeja Commercial District, Lagos State, Nigeria',
       is_active: true,
       created_at: new Date().toISOString(),
     },
     {
       id: '33333333-3333-3333-3333-333333333333',
-      name: 'Port Harcourt Hub',
+      name: 'South West Branch',
+      address: 'Ibadan Zonal Office, Oyo State, Nigeria',
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: '44444444-4444-4444-4444-444444444444',
+      name: 'South South Branch',
       address: 'Trans Amadi Industrial Layout, Port Harcourt, Rivers State, Nigeria',
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: '55555555-5555-5555-5555-555555555555',
+      name: 'South East Branch',
+      address: 'Enugu Regional Center, Enugu State, Nigeria',
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: '66666666-6666-6666-6666-666666666666',
+      name: 'North Central Branch',
+      address: 'Central Business District, Abuja FCT, Nigeria',
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: '77777777-7777-7777-7777-777777777777',
+      name: 'North West Branch',
+      address: 'Kano Commercial Hub, Kano State, Nigeria',
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: '88888888-8888-8888-8888-888888888888',
+      name: 'North East Branch',
+      address: 'Maiduguri Office, Borno State, Nigeria',
       is_active: true,
       created_at: new Date().toISOString(),
     },
@@ -377,7 +412,25 @@ export const VLMSService = {
       return { transaction: existing, anomalies: [] };
     }
 
-    const previousKm = await this.getLatestOdometer(input.vehicleId);
+    // Verify odometer strictly against today's staff daily log recorded on the same day
+    const today = getBusinessDate();
+    const todayLog = store.dailyLogs.find(
+      (l) => l.vehicle_id === input.vehicleId && l.business_date === today
+    );
+
+    if (!todayLog) {
+      throw new Error(
+        `No verified daily log found for today (${today}). You must submit your daily vehicle log before recording fuel purchases.`
+      );
+    }
+
+    if (input.odometerKm < todayLog.odometer_km) {
+      throw new Error(
+        `Fuel purchase odometer reading (${input.odometerKm} km) cannot be lower than today's verified daily log reading (${todayLog.odometer_km} km).`
+      );
+    }
+
+    const previousKm = todayLog.odometer_km;
 
     // Anomaly evaluation
     const detected = evaluateAnomalies({
@@ -392,7 +445,7 @@ export const VLMSService = {
       id: newTxId,
       vehicle_id: input.vehicleId,
       user_id: input.userId,
-      daily_log_id: input.dailyLogId ?? null,
+      daily_log_id: todayLog.id,
       payment_method: input.paymentMethod,
       tom_card_id: input.tomCardId ?? null,
       vendor_name: input.vendorName,
@@ -480,16 +533,51 @@ export const VLMSService = {
   // Registration Request & Approval
   async submitRegistration(input: {
     fullName: string;
+    phoneNumber?: string;
     employeeId?: string;
     plateNumber: string;
     tomCardNumber?: string;
     officeId: string;
+    carName?: string;
+    carModel?: string;
+    carYear?: number;
+    requestedRole?: UserRole;
+    adminPasscode?: string;
   }): Promise<RegistrationRequest> {
+    const normalizedPlate = normalizePlateNumber(input.plateNumber);
+
+    // 1. Data Integrity: Enforce Unique constraint on vehicle plate number
+    const existingVehicle = store.vehicles.find((v) => v.plate_number === normalizedPlate);
+    const existingPending = store.registrationRequests.find(
+      (r) => r.status === 'pending' && normalizePlateNumber(r.requested_plate_number) === normalizedPlate
+    );
+    if (existingVehicle || existingPending) {
+      throw new Error('Plate number already exists in the database. Kindly sign in.');
+    }
+
+    // 2. Validate TOM Card 6-digit numeric format
+    if (input.tomCardNumber && input.tomCardNumber.trim()) {
+      const trimmed = input.tomCardNumber.trim();
+      if (!/^\d{6}$/.test(trimmed)) {
+        throw new Error('TOM Card number must be exactly 6 numeric digits (e.g. 804689).');
+      }
+    }
+
+    // 3. Role Management: Privileged Role Key Check
+    const assignedRole: UserRole = input.requestedRole || 'staff';
+    if (assignedRole !== 'staff') {
+      const validPasscode = process.env.ADMIN_REGISTRATION_PASSCODE || 'VLMS-ADMIN-2026';
+      if (!input.adminPasscode || input.adminPasscode.trim() !== validPasscode) {
+        throw new Error('Invalid administrative authorization key for privileged role registration.');
+      }
+    }
+
     const userId = `p-user-${Date.now()}`;
     const newProfile: Profile = {
       id: userId,
       auth_user_id: `auth-${Date.now()}`,
       full_name: input.fullName,
+      phone_number: input.phoneNumber ?? null,
       employee_id: input.employeeId ?? null,
       office_id: input.officeId,
       status: 'pending',
@@ -497,15 +585,20 @@ export const VLMSService = {
       updated_at: new Date().toISOString(),
     };
     store.profiles.push(newProfile);
-    store.userRoles.push({ userId, role: 'staff' });
+    store.userRoles.push({ userId, role: assignedRole });
 
     const reqId = `reg-${Date.now()}`;
     const req: RegistrationRequest = {
       id: reqId,
       user_id: userId,
-      requested_plate_number: input.plateNumber,
+      requested_plate_number: normalizedPlate,
+      requested_phone_number: input.phoneNumber ?? null,
+      requested_car_name: input.carName ?? null,
+      requested_car_model: input.carModel ?? null,
+      requested_car_year: input.carYear ?? null,
       requested_tom_card: input.tomCardNumber ?? null,
       requested_office_id: input.officeId,
+      requested_role: assignedRole,
       status: 'pending',
       reviewer_id: null,
       reviewed_at: null,
@@ -522,7 +615,15 @@ export const VLMSService = {
       entity_type: 'REGISTRATION_REQUEST',
       entity_id: reqId,
       before_data: null,
-      after_data: { fullName: input.fullName, plateNumber: input.plateNumber },
+      after_data: {
+        fullName: input.fullName,
+        phoneNumber: input.phoneNumber,
+        plateNumber: normalizedPlate,
+        carName: input.carName,
+        carModel: input.carModel,
+        carYear: input.carYear,
+        role: assignedRole,
+      },
       created_at: new Date().toISOString(),
     });
 
@@ -546,13 +647,14 @@ export const VLMSService = {
     // Assign vehicle if exists
     let vehicle = store.vehicles.find((v) => v.plate_number === req.requested_plate_number);
     if (!vehicle) {
-      // Auto-register vehicle if not exists
+      // Auto-register vehicle with requested car specifications
       vehicle = {
         id: `v-${Date.now()}`,
         plate_number: req.requested_plate_number,
-        make: 'Fleet Vehicle',
-        model: 'Standard',
-        year: 2023,
+        make: req.requested_car_name || 'Toyota',
+        model: req.requested_car_model || 'Corolla',
+        car_name: req.requested_car_name || 'Company Car',
+        year: req.requested_car_year || 2023,
         status: 'active',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

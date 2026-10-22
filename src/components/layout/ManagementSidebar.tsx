@@ -7,7 +7,7 @@ import {
   LayoutDashboard,
   Users,
   CheckCircle2,
-  Truck,
+  Car,
   CreditCard,
   FileSpreadsheet,
   Fuel,
@@ -36,7 +36,7 @@ export function ManagementSidebar() {
     {
       title: 'Fleet Assets',
       items: [
-        { href: '/management/vehicles', label: 'Vehicles Directory', icon: Truck },
+        { href: '/management/vehicles', label: 'Vehicles Directory', icon: Car },
         { href: '/management/users', label: 'Staff & Drivers', icon: Users },
         { href: '/management/tom-cards', label: 'TOM Cards', icon: CreditCard },
       ],

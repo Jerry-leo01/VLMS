@@ -6,7 +6,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { AuditEvent } from '@/types/database';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, formatAuditActionText } from '@/lib/utils';
 import { History, ArrowLeft, Shield, Search } from 'lucide-react';
 
 export default function AuditTrailPage() {
@@ -76,41 +76,76 @@ export default function AuditTrailPage() {
             </div>
           </div>
 
+          {/* Responsive Audit Events List */}
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-3 px-4">Timestamp</th>
-                  <th className="py-3 px-4">Actor</th>
-                  <th className="py-3 px-4">Action</th>
-                  <th className="py-3 px-4">Entity</th>
-                  <th className="py-3 px-4">Audit Payload</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filtered.map((ev) => (
-                  <tr key={ev.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono text-slate-500">
-                      {formatDateTime(ev.created_at)}
-                    </td>
-                    <td className="py-3 px-4 font-semibold text-slate-900">
-                      {ev.actor?.full_name ?? 'System Administrator'}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="font-mono text-xs font-bold text-navy-900 bg-slate-100 px-2 py-0.5 rounded">
-                        {ev.action}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-mono text-slate-600">
-                      {ev.entity_type} ({ev.entity_id.substring(0, 12)}...)
-                    </td>
-                    <td className="py-3 px-4 text-slate-700 font-mono text-[11px] max-w-xs truncate">
-                      {JSON.stringify(ev.after_data)}
-                    </td>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">Timestamp</th>
+                    <th className="py-3 px-4">Authorized Actor</th>
+                    <th className="py-3 px-4">Action</th>
+                    <th className="py-3 px-4">Plain Text Description</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-slate-400">
+                        No audit events match the query.
+                      </td>
+                    </tr>
+                  ) : (
+                    filtered.map((ev) => (
+                      <tr key={ev.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4 font-mono text-slate-500 whitespace-nowrap">
+                          {formatDateTime(ev.created_at)}
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-slate-900 whitespace-nowrap">
+                          {ev.actor?.full_name ?? 'System Administrator'}
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <span className="font-mono text-[11px] font-bold text-navy-900 bg-slate-100 px-2 py-0.5 rounded">
+                            {ev.action}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-800 font-normal leading-relaxed">
+                          {formatAuditActionText(ev.action, ev.entity_type, ev.after_data, ev.before_data)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile View: Clean cards with legible spacing */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filtered.length === 0 ? (
+                <div className="p-6 text-center text-slate-400 text-xs">
+                  No audit events found.
+                </div>
+              ) : (
+                filtered.map((ev) => (
+                  <div key={ev.id} className="p-4 space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-semibold text-slate-900">
+                        {ev.actor?.full_name ?? 'System Administrator'}
+                      </span>
+                      <span className="text-slate-400 font-mono">
+                        {formatDateTime(ev.created_at)}
+                      </span>
+                    </div>
+                    <span className="inline-block font-mono text-[10px] font-bold text-navy-900 bg-slate-100 px-2 py-0.5 rounded">
+                      {ev.action}
+                    </span>
+                    <p className="text-slate-700 leading-relaxed font-normal text-xs">
+                      {formatAuditActionText(ev.action, ev.entity_type, ev.after_data, ev.before_data)}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </main>
       </div>

@@ -6,7 +6,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { AnomalyAlert } from '@/types/database';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, formatAnomalyText } from '@/lib/utils';
 import { AlertTriangle, CheckCircle2, Search, ArrowLeft, ShieldAlert, Eye, MessageSquare } from 'lucide-react';
 
 export default function AnomalyManagementPage() {
@@ -140,13 +140,14 @@ export default function AnomalyManagementPage() {
                     </span>
                   </div>
 
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1 font-mono">
-                    <div className="text-slate-500 font-sans text-[11px] uppercase tracking-wider font-semibold">
-                      Diagnostic Telemetry
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-1.5">
+                    <div className="text-slate-500 text-[11px] uppercase tracking-wider font-semibold flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Audit Anomaly Analysis</span>
                     </div>
-                    <pre className="text-slate-800 text-[11px] whitespace-pre-wrap font-mono">
-                      {JSON.stringify(alert.details, null, 2)}
-                    </pre>
+                    <p className="text-slate-800 text-xs font-medium leading-relaxed">
+                      {formatAnomalyText(alert.rule_code, alert.details)}
+                    </p>
                   </div>
 
                   {alert.resolution_note && (

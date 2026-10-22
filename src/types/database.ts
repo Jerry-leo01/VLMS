@@ -46,7 +46,8 @@ export interface Profile {
   id: string;
   auth_user_id: string;
   full_name: string;
-  employee_id: string | null;
+  phone_number?: string | null;
+  employee_id?: string | null;
   office_id: string | null;
   status: UserStatus;
   created_at: string;
@@ -60,6 +61,7 @@ export interface Vehicle {
   plate_number: string;
   make: string | null;
   model: string | null;
+  car_name?: string | null;
   year: number | null;
   status: VehicleStatus;
   created_at: string;
@@ -94,8 +96,13 @@ export interface RegistrationRequest {
   id: string;
   user_id: string;
   requested_plate_number: string;
+  requested_phone_number?: string | null;
+  requested_car_name?: string | null;
+  requested_car_model?: string | null;
+  requested_car_year?: number | null;
   requested_tom_card: string | null;
   requested_office_id: string | null;
+  requested_role?: UserRole | null;
   status: 'pending' | 'approved' | 'rejected';
   reviewer_id: string | null;
   reviewed_at: string | null;

@@ -70,3 +70,81 @@ export function formatDateTime(isoString: string | null | undefined, timezone: s
     return isoString;
   }
 }
+
+/**
+ * Formats an audit event record into clear, human-readable plain text
+ */
+export function formatAuditActionText(
+  action: string,
+  entityType: string,
+  afterData?: Record<string, unknown> | null,
+  beforeData?: Record<string, unknown> | null
+): string {
+  if (!afterData && !beforeData) {
+    return `${action.replace(/_/g, ' ')} on ${entityType}`;
+  }
+
+  const d = afterData || {};
+
+  switch (action) {
+    case 'DAILY_LOG_SUBMITTED':
+      return `Submitted daily log with odometer reading of ${formatOdometer(
+        Number(d.odometer_km)
+      )} for vehicle ${d.vehicle_id || ''}.`;
+    case 'FUEL_TRANSACTION_SUBMITTED':
+      return `Recorded fuel purchase of ${d.quantity_litres || 0} L (${formatCurrency(
+        Number(d.amount || 0)
+      )}) via ${(String(d.payment_method || '')).replace(/_/g, ' ')}.`;
+    case 'REGISTRATION_SUBMITTED':
+      return `Registration request submitted by ${d.fullName || 'User'} for car ${
+        d.carName ? `${d.carName} ` : ''
+      }(Plate: ${d.plateNumber || 'N/A'}, Role: ${d.role || 'Staff'}).`;
+    case 'REGISTRATION_APPROVED':
+      return `Registration approved by administrator. Assigned vehicle active.`;
+    case 'REGISTRATION_REJECTED':
+      return `Registration rejected: ${d.reason || 'Criteria not met'}.`;
+    case 'ANOMALY_STATUS_UPDATED':
+      return `Anomaly alert updated to status "${d.status || 'Resolved'}". Note: ${
+        d.resolution_note || 'Reviewed'
+      }`;
+    case 'SYSTEM_INITIALIZED':
+      return `System initial operational fleet baseline loaded.`;
+    default:
+      return `${action.replace(/_/g, ' ')} executed on ${entityType}.`;
+  }
+}
+
+/**
+ * Formats an anomaly rule and diagnostic telemetry into user-friendly plain text
+ */
+export function formatAnomalyText(ruleCode: string, details?: Record<string, unknown> | null): string {
+  const d = details || {};
+  switch (ruleCode) {
+    case 'ODO_DECREASE':
+      return `Reported odometer reading (${formatOdometer(Number(d.currentKm))}) is ${Math.abs(
+        Number(d.difference || 0)
+      )} km below the previous valid reading (${formatOdometer(Number(d.previousKm))}).`;
+    case 'ODO_ZERO_CHANGE':
+      return `Odometer reading (${formatOdometer(
+        Number(d.currentKm)
+      )}) has not changed since the last recorded log (0 km difference).`;
+    case 'ODO_HIGH_DAILY_DISTANCE':
+      return `Traveled distance of ${Number(d.deltaKm || 0).toLocaleString()} km exceeds the maximum single-day threshold of ${Number(d.thresholdKm || 800)} km.`;
+    case 'OCR_LOW_CONFIDENCE':
+      return `Camera photograph resulted in low OCR optical confidence (${Number(d.ocrConfidence || 0)}%). Image clarity requires verification.`;
+    case 'OCR_MANUAL_MISMATCH':
+      return `Driver-confirmed reading (${formatOdometer(
+        Number(d.currentKm)
+      )}) differs by ${Number(d.difference || 0)} km from the camera OCR proposal (${formatOdometer(
+        Number(d.ocrProposedKm)
+      )}).`;
+    case 'DUPLICATE_EVIDENCE':
+      return `Photograph cryptographic hash matches an image that was previously submitted for another fleet log.`;
+    case 'MISSING_RECEIPT':
+      return `Personal-fund fuel claim was submitted without an attached official fuel receipt photograph.`;
+    case 'LOCATION_OUTLIER':
+      return `Recorded GPS coordinates (${Number(d.latitude || 0).toFixed(4)}, ${Number(d.longitude || 0).toFixed(4)}) fall outside the standard company branch operating boundary.`;
+    default:
+      return `Anomaly flagged under rule ${ruleCode}. Supervisory verification recommended.`;
+  }
+}

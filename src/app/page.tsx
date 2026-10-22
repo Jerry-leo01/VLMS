@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Truck, ShieldCheck, Camera, Fuel, BarChart3, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Car, ShieldCheck, Camera, Fuel, BarChart3, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 export default function LandingPage() {
   return (
@@ -9,7 +9,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="bg-navy-900 text-white p-2 rounded-lg">
-              <Truck className="w-5 h-5" />
+              <Car className="w-5 h-5" />
             </div>
             <span className="font-bold text-lg tracking-tight text-navy-900">VLMS</span>
           </div>

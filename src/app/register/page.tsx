@@ -2,21 +2,51 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Truck, Shield, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Car, ShieldCheck, CheckCircle2, AlertCircle, ArrowLeft, KeyRound } from 'lucide-react';
 import { normalizePlateNumber } from '@/lib/utils';
 import { VLMSService } from '@/lib/services/vlms-service';
+import { UserRole } from '@/types/database';
 
 export default function RegisterPage() {
+  // Form State
+  const [accountType, setAccountType] = useState<'staff' | 'management'>('staff');
+  const [requestedRole, setRequestedRole] = useState<UserRole>('staff');
+  const [adminPasscode, setAdminPasscode] = useState('');
   const [fullName, setFullName] = useState('');
-  const [employeeId, setEmployeeId] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [plateNumber, setPlateNumber] = useState('');
   const [tomCardNumber, setTomCardNumber] = useState('');
   const [officeId, setOfficeId] = useState('11111111-1111-1111-1111-111111111111');
+  const [carName, setCarName] = useState('');
+  const [carModel, setCarModel] = useState('');
+  const [carYear, setCarYear] = useState('2022');
   const [password, setPassword] = useState('');
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const exactOffices = [
+    { id: '11111111-1111-1111-1111-111111111111', name: 'Head Office' },
+    { id: '22222222-2222-2222-2222-222222222222', name: 'Lagos Branch' },
+    { id: '33333333-3333-3333-3333-333333333333', name: 'South West Branch' },
+    { id: '44444444-4444-4444-4444-444444444444', name: 'South South Branch' },
+    { id: '55555555-5555-5555-5555-555555555555', name: 'South East Branch' },
+    { id: '66666666-6666-6666-6666-666666666666', name: 'North Central Branch' },
+    { id: '77777777-7777-7777-7777-777777777777', name: 'North West Branch' },
+    { id: '88888888-8888-8888-8888-888888888888', name: 'North East Branch' },
+  ];
+
+  const handleAccountTypeChange = (type: 'staff' | 'management') => {
+    setAccountType(type);
+    if (type === 'staff') {
+      setRequestedRole('staff');
+      setAdminPasscode('');
+    } else {
+      setRequestedRole('administrator');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,15 +57,30 @@ export default function RegisterPage() {
       return;
     }
 
+    if (tomCardNumber.trim() && !/^\d{6}$/.test(tomCardNumber.trim())) {
+      setError('TOM Card number must be exactly 6 numeric digits (e.g. 804689).');
+      return;
+    }
+
+    if (accountType === 'management' && !adminPasscode.trim()) {
+      setError('Administrative authorization passcode is required for management onboarding.');
+      return;
+    }
+
     setLoading(true);
     try {
       const normalizedPlate = normalizePlateNumber(plateNumber);
       await VLMSService.submitRegistration({
         fullName,
-        employeeId: employeeId || undefined,
+        phoneNumber,
         plateNumber: normalizedPlate,
-        tomCardNumber: tomCardNumber || undefined,
+        tomCardNumber: tomCardNumber.trim() || undefined,
         officeId,
+        carName,
+        carModel,
+        carYear: parseInt(carYear, 10) || 2022,
+        requestedRole,
+        adminPasscode: adminPasscode.trim() || undefined,
       });
 
       setSubmitted(true);
@@ -48,41 +93,41 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-xl">
         <div className="flex justify-center">
           <div className="bg-navy-900 text-white p-3 rounded-2xl shadow-md">
-            <Truck className="w-8 h-8" />
+            <Car className="w-8 h-8" />
           </div>
         </div>
-        <h2 className="mt-4 text-center text-2xl font-bold tracking-tight text-slate-900">
-          Staff Registration Request
+        <h2 className="mt-3 text-center text-2xl font-bold tracking-tight text-slate-900">
+          Company Car Registration
         </h2>
-        <p className="mt-1 text-center text-xs text-slate-500">
-          Submit your vehicle and driver details for administrator verification
+        <p className="mt-1 text-center text-xs sm:text-sm text-slate-500">
+          Register company assigned car, driver credentials, and TOM card details
         </p>
       </div>
 
-      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md px-4">
-        <div className="bg-white py-8 px-6 shadow-sm border border-slate-200 rounded-2xl sm:px-8 space-y-6">
+      <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-xl">
+        <div className="bg-white py-6 sm:py-8 px-4 sm:px-8 shadow-sm border border-slate-200 rounded-2xl space-y-6">
           {submitted ? (
             <div className="text-center space-y-4 py-4">
               <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900">Request Submitted Successfully</h3>
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Your registration for vehicle <strong className="text-navy-900 font-mono">{normalizePlateNumber(plateNumber)}</strong> has been sent to the Fleet Administrator for verification.
+              <h3 className="text-lg font-bold text-slate-900">Registration Submitted Successfully</h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
+                Your registration for company car <strong className="text-navy-900 font-mono font-bold">{normalizePlateNumber(plateNumber)}</strong> ({carName}) has been received for verification.
               </p>
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 text-left">
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 text-left space-y-1">
                 <strong>Status: Pending Verification</strong>
-                <p className="mt-0.5">
-                  You will receive authorization once your vehicle and credentials have been verified by your department head or administrator.
+                <p>
+                  Fleet administration will review your car details, phone number, and branch assignment. Once authorized, you can log in to submit daily logs and fuel records.
                 </p>
               </div>
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-navy-900 text-white rounded-lg text-sm font-semibold hover:bg-navy-800"
+                className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-navy-900 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-navy-800 transition-colors"
               >
                 Return to Login
               </Link>
@@ -90,83 +135,217 @@ export default function RegisterPage() {
           ) : (
             <>
               {error && (
-                <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-800 flex items-start gap-2">
+                <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs sm:text-sm text-red-800 flex items-start gap-2.5">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
                   <span>{error}</span>
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Full Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="e.g. Chukwuma Eze"
-                    className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
-                  />
-                </div>
-
+              {/* Account Role Selector */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Select Registration Type
+                </label>
                 <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleAccountTypeChange('staff')}
+                    className={`py-3 px-4 rounded-xl border text-left transition-all ${
+                      accountType === 'staff'
+                        ? 'border-navy-900 bg-navy-50/60 ring-2 ring-navy-900'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="block text-xs sm:text-sm font-bold text-slate-900">Staff Driver</span>
+                    <span className="text-[11px] text-slate-500 block mt-0.5">Assigned Company Car</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleAccountTypeChange('management')}
+                    className={`py-3 px-4 rounded-xl border text-left transition-all ${
+                      accountType === 'management'
+                        ? 'border-navy-900 bg-navy-50/60 ring-2 ring-navy-900'
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="block text-xs sm:text-sm font-bold text-slate-900">Administrator / Mgr</span>
+                    <span className="text-[11px] text-slate-500 block mt-0.5">Privileged Passcode</span>
+                  </button>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Privileged Role Sub-Selection */}
+                {accountType === 'management' && (
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-navy-950">
+                      <KeyRound className="w-4 h-4 text-blue-600" />
+                      Administrative Authorization
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700">Privileged Role</label>
+                        <select
+                          value={requestedRole}
+                          onChange={(e) => setRequestedRole(e.target.value as UserRole)}
+                          className="mt-1 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-navy-800"
+                        >
+                          <option value="administrator">Administrator</option>
+                          <option value="fleet_manager">Fleet Manager</option>
+                          <option value="department_head">Department Head</option>
+                          <option value="auditor">Auditor</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700">
+                          Security Passcode <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="password"
+                          required
+                          value={adminPasscode}
+                          onChange={(e) => setAdminPasscode(e.target.value)}
+                          placeholder="e.g. VLMS-ADMIN-2026"
+                          className="mt-1 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-navy-800"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Personal Information */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700">Employee ID</label>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Full Name <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type="text"
-                      value={employeeId}
-                      onChange={(e) => setEmployeeId(e.target.value)}
-                      placeholder="EMP-DRV-001"
-                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      required
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="e.g. Chukwuma Eze"
+                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700">
-                      Vehicle Plate <span className="text-red-500">*</span>
+                      User Phone Number <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="e.g. 08031234567"
+                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                    />
+                  </div>
+                </div>
+
+                {/* Vehicle Plate & TOM Card */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Vehicle Plate Number <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       required
                       value={plateNumber}
                       onChange={(e) => setPlateNumber(e.target.value)}
-                      placeholder="KJA-842XA"
-                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono uppercase focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700">TOM Card No.</label>
-                    <input
-                      type="text"
-                      value={tomCardNumber}
-                      onChange={(e) => setTomCardNumber(e.target.value)}
-                      placeholder="7004-xxxx-xxxx-1024"
-                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      placeholder="e.g. KJA-842XA"
+                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm font-mono uppercase focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700">
-                      Office Location <span className="text-red-500">*</span>
+                      TOM Card Number <span className="text-slate-400 font-normal">(6 digits)</span>
                     </label>
-                    <select
-                      value={officeId}
-                      onChange={(e) => setOfficeId(e.target.value)}
-                      className="mt-1 w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
-                    >
-                      <option value="11111111-1111-1111-1111-111111111111">Lagos HQ</option>
-                      <option value="22222222-2222-2222-2222-222222222222">Abuja Regional</option>
-                      <option value="33333333-3333-3333-3333-333333333333">Port Harcourt Hub</option>
-                    </select>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      value={tomCardNumber}
+                      onChange={(e) => setTomCardNumber(e.target.value)}
+                      placeholder="e.g. 804689"
+                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                    />
                   </div>
                 </div>
 
+                {/* Company Car Information */}
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Company Car Specifications
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Car Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={carName}
+                        onChange={(e) => setCarName(e.target.value)}
+                        placeholder="e.g. Toyota Corolla"
+                        className="mt-1 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Car Model <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={carModel}
+                        onChange={(e) => setCarModel(e.target.value)}
+                        placeholder="e.g. LE / 1.8L"
+                        className="mt-1 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700">
+                        Car Year <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="1990"
+                        max={new Date().getFullYear() + 2}
+                        required
+                        value={carYear}
+                        onChange={(e) => setCarYear(e.target.value)}
+                        placeholder="e.g. 2022"
+                        className="mt-1 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Office Locations Dropdown (Exact 8 Options) */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700">
-                    Create Password <span className="text-red-500">*</span>
+                    Office Branch Location <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={officeId}
+                    onChange={(e) => setOfficeId(e.target.value)}
+                    className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                  >
+                    {exactOffices.map((off) => (
+                      <option key={off.id} value={off.id}>
+                        {off.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Password */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Password <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="password"
@@ -175,20 +354,21 @@ export default function RegisterPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Min 6 characters"
-                    className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                    className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
                   />
                 </div>
 
-                <div className="flex items-start gap-2 pt-1">
+                {/* Privacy Acknowledgement */}
+                <div className="flex items-start gap-2.5 pt-1">
                   <input
                     id="privacy"
                     type="checkbox"
                     checked={privacyAccepted}
                     onChange={(e) => setPrivacyAccepted(e.target.checked)}
-                    className="mt-1 rounded text-navy-900 focus:ring-navy-800"
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-navy-900 focus:ring-navy-800"
                   />
                   <label htmlFor="privacy" className="text-xs text-slate-600 leading-normal">
-                    I acknowledge that odometer photographs and location coordinates are captured solely for official fleet audit purposes in accordance with the{' '}
+                    I acknowledge that odometer photographs and location coordinates are captured solely for official company car audit purposes in accordance with the{' '}
                     <Link href="/privacy" className="text-navy-900 font-semibold underline">
                       VLMS Privacy Policy
                     </Link>
@@ -199,9 +379,9 @@ export default function RegisterPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3 px-4 bg-navy-900 hover:bg-navy-800 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition-colors"
+                  className="w-full py-3.5 px-4 bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-md transition-colors"
                 >
-                  {loading ? 'Submitting Request...' : 'Submit Registration Request'}
+                  {loading ? 'Submitting Registration...' : 'Submit Car Registration Request'}
                 </button>
               </form>
 

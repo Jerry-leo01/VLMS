@@ -62,18 +62,54 @@ describe('VLMS Service & Business Logic', () => {
   it('should process registration request and approve user into active status', async () => {
     const req = await VLMSService.submitRegistration({
       fullName: 'Oluwaseun Bakare',
-      employeeId: 'EMP-LOG-88',
+      phoneNumber: '+2348012345678',
       plateNumber: 'EKY-319TN',
+      carName: 'Toyota Corolla Executive',
+      carModel: 'Corolla LE',
+      carYear: '2023',
+      tomCardNumber: '804689',
       officeId: '11111111-1111-1111-1111-111111111111',
     });
 
     expect(req.status).toBe('pending');
+    expect(req.requested_car_name).toBe('Toyota Corolla Executive');
 
     const approved = await VLMSService.approveRegistration(req.id, 'p-admin-01');
     expect(approved.status).toBe('approved');
 
     const profile = await VLMSService.getStaffProfile(req.user_id);
     expect(profile?.status).toBe('active');
+  });
+
+  it('should prevent registration of existing plate number with exact error message', async () => {
+    // EKY-319TN was already registered and approved above
+    await expect(
+      VLMSService.submitRegistration({
+        fullName: 'Duplicate Driver',
+        phoneNumber: '+2348099999999',
+        plateNumber: 'EKY-319TN',
+        officeId: '11111111-1111-1111-1111-111111111111',
+      })
+    ).rejects.toThrow('Plate number already exists in the database. Kindly sign in.');
+  });
+
+  it('should reject fuel transaction if no daily log has been submitted today for the vehicle', async () => {
+    // Vehicle without today's log
+    const unloggedVehicle = 'v-honda-civic';
+    await expect(
+      VLMSService.submitFuelTransaction({
+        vehicleId: unloggedVehicle,
+        userId: 'p-staff-02',
+        paymentMethod: 'tom_card',
+        vendorName: 'TOTAL ENERGIES FILLING STATION',
+        odometerKm: 33000,
+        odometerEvidenceId: 'ev-seed-01',
+        amount: 25000,
+        quantityLitres: 30,
+        purchasedAt: new Date().toISOString(),
+        idempotencyKey: 'idem-test-no-log',
+      })
+    ).rejects.toThrow(/No verified daily log found for today/i);
   });
 
   it('should maintain immutable audit log of actions', async () => {

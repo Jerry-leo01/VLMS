@@ -8,7 +8,7 @@ import { VLMSService } from '@/lib/services/vlms-service';
 import { DailyLog, VehicleAssignment, Profile } from '@/types/database';
 import { formatOdometer, formatDateTime, getBusinessDate } from '@/lib/utils';
 import {
-  Truck,
+  Car,
   CheckCircle2,
   Clock,
   Camera,

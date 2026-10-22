@@ -7,7 +7,7 @@ import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { Vehicle } from '@/types/database';
 import { formatOdometer } from '@/lib/utils';
-import { Truck, ArrowLeft, Search, Plus } from 'lucide-react';
+import { Car, ArrowLeft, Search, Plus } from 'lucide-react';
 
 export default function VehiclesManagementPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);

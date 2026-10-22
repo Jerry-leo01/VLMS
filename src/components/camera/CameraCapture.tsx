@@ -7,12 +7,16 @@ interface CameraCaptureProps {
   onCapture: (imageDataUrl: string, hash: string) => void;
   title?: string;
   instruction?: string;
+  overlayText?: string;
+  captureType?: 'odometer' | 'receipt' | 'general';
 }
 
 export function CameraCapture({
   onCapture,
   title = 'Photograph Odometer Dashboard',
   instruction = 'Position the camera directly in front of the vehicle odometer. Ensure numbers are well lit and clearly legible.',
+  overlayText,
+  captureType = 'odometer',
 }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -22,6 +26,34 @@ export function CameraCapture({
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  // Resolved dynamic overlay text based on captureType
+  const defaultOverlay =
+    captureType === 'receipt'
+      ? 'Frame Fuel Receipt Clearly Here'
+      : 'Center Odometer Digits Here';
+  const effectiveOverlayText = overlayText || defaultOverlay;
+
+  // Reliable stream attachment helper
+  const attachStreamToVideo = () => {
+    if (videoRef.current && streamRef.current) {
+      const video = videoRef.current;
+      video.srcObject = streamRef.current;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('autoplay', 'true');
+      video.muted = true;
+      video
+        .play()
+        .catch((err) => console.warn('Camera video play error:', err));
+    }
+  };
+
+  // Ensure stream is attached whenever cameraActive becomes true
+  useEffect(() => {
+    if (cameraActive) {
+      attachStreamToVideo();
+    }
+  }, [cameraActive]);
 
   // Start Camera Stream
   const startCamera = async () => {
@@ -35,10 +67,11 @@ export function CameraCapture({
         audio: false,
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
       setCameraActive(true);
+      // Small timeout to guarantee DOM video node is present if just rendered
+      setTimeout(() => {
+        attachStreamToVideo();
+      }, 50);
     } catch (err: unknown) {
       const error = err as Error;
       console.warn('Camera error:', error);
@@ -168,7 +201,7 @@ export function CameraCapture({
               {/* Target Framing Overlay */}
               <div className="absolute inset-x-8 inset-y-6 border-2 border-dashed border-emerald-400/80 rounded-lg pointer-events-none flex items-center justify-center">
                 <span className="text-[11px] font-semibold text-emerald-300 bg-black/60 px-2 py-0.5 rounded">
-                  Center Odometer Digits Here
+                  {effectiveOverlayText}
                 </span>
               </div>
             </div>

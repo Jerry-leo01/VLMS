@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Truck, User, LogOut, Shield, Menu, X, FileText, Fuel } from 'lucide-react';
+import { Car, User, LogOut, Shield, Menu, X, FileText, Fuel } from 'lucide-react';
 
 interface NavbarProps {
   userRole?: 'staff' | 'department_head' | 'fleet_manager' | 'auditor' | 'administrator';
@@ -22,7 +22,7 @@ export function Navbar({ userRole = 'staff', userName = 'Staff Member', vehicleP
         <div className="flex items-center gap-3">
           <Link href={isManagement ? '/management' : '/staff'} className="flex items-center gap-2">
             <div className="bg-navy-900 text-white p-2 rounded-lg flex items-center justify-center shadow-sm">
-              <Truck className="w-5 h-5" />
+              <Car className="w-5 h-5" />
             </div>
             <div>
               <span className="font-bold text-lg tracking-tight text-navy-900">VLMS</span>

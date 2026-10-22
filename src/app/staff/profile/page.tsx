@@ -5,7 +5,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { Profile, VehicleAssignment, TomCard } from '@/types/database';
-import { User, Truck, CreditCard, Building, ShieldCheck, LogOut } from 'lucide-react';
+import { User, Car, CreditCard, Building, ShieldCheck, LogOut, Phone } from 'lucide-react';
 import Link from 'next/link';
 
 export default function StaffProfilePage() {
@@ -45,7 +45,9 @@ export default function StaffProfilePage() {
             </div>
             <div>
               <h2 className="text-lg font-bold text-slate-900">{profile?.full_name ?? 'Chukwuma Eze'}</h2>
-              <span className="text-xs text-slate-500 block">Employee ID: {profile?.employee_id ?? 'EMP-DRV-042'}</span>
+              <span className="text-xs text-slate-500 block">
+                Phone: {profile?.phone_number ?? profile?.employee_id ?? 'Not provided'}
+              </span>
               <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
                 <ShieldCheck className="w-3.5 h-3.5" /> Account Verified & Active
               </span>
@@ -55,10 +57,10 @@ export default function StaffProfilePage() {
           <div className="space-y-4 text-xs">
             <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
               <span className="text-slate-500 flex items-center gap-2">
-                <Truck className="w-4 h-4 text-navy-800" /> Assigned Fleet Vehicle
+                <Car className="w-4 h-4 text-navy-800" /> Assigned Company Car
               </span>
               <span className="font-mono font-bold text-navy-950">
-                {assignment?.vehicle?.plate_number ?? 'KJA-842XA'} ({assignment?.vehicle?.make} {assignment?.vehicle?.model})
+                {assignment?.vehicle?.plate_number ?? 'KJA-842XA'} ({assignment?.vehicle?.car_name || assignment?.vehicle?.make} {assignment?.vehicle?.model})
               </span>
             </div>
 
