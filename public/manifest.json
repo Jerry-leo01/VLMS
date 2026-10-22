@@ -1,0 +1,21 @@
+{
+  "name": "Vehicle Log Management System",
+  "short_name": "VLMS",
+  "description": "Enterprise fleet vehicle daily odometer logging and fuel tracking",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#102a43",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
