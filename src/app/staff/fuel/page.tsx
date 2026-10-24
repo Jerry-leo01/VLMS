@@ -5,6 +5,7 @@ import { Navbar } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { CameraCapture } from '@/components/camera/CameraCapture';
 import { OcrConfirmation } from '@/components/ocr/OcrConfirmation';
+import { ReceiptConfirmation } from '@/components/ocr/ReceiptConfirmation';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { VehicleAssignment, Profile, DailyLog, TomCard, FuelTransaction } from '@/types/database';
 import { formatCurrency, formatOdometer, getBusinessDate } from '@/lib/utils';
@@ -46,6 +47,8 @@ export default function FuelPurchasePage() {
   const [receiptHash, setReceiptHash] = useState<string | null>(null);
   const [receiptOcr, setReceiptOcr] = useState<ReceiptOcrResult | null>(null);
   const [isScanningReceipt, setIsScanningReceipt] = useState(false);
+  const [receiptConfirmed, setReceiptConfirmed] = useState(false);
+  const [receiptDateTime, setReceiptDateTime] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -93,35 +96,37 @@ export default function FuelPurchasePage() {
   const handleReceiptCaptured = async (dataUrl: string, hash: string) => {
     setReceiptPhoto(dataUrl);
     setReceiptHash(hash);
+    setReceiptConfirmed(false);
     setIsScanningReceipt(true);
     try {
       const parsed = await processReceiptImage(dataUrl);
       setReceiptOcr(parsed);
-      if (parsed.vendorName && !vendorName) {
-        setVendorName(parsed.vendorName);
-      }
-      if (parsed.amount && !amount) {
-        setAmount(parsed.amount.toString());
-      }
-      if (parsed.quantityLitres && !litres) {
-        setLitres(parsed.quantityLitres.toString());
-      }
     } finally {
       setIsScanningReceipt(false);
     }
   };
 
-  const applyReceiptData = () => {
-    if (!receiptOcr) return;
-    if (receiptOcr.vendorName && paymentMethod === 'personal_fund') {
-      setVendorName(receiptOcr.vendorName);
-    }
-    if (receiptOcr.amount) {
-      setAmount(receiptOcr.amount.toString());
-    }
-    if (receiptOcr.quantityLitres) {
-      setLitres(receiptOcr.quantityLitres.toString());
-    }
+  const handleReceiptConfirmed = (verified: {
+    fillingStation: string;
+    transactionDateTime: string | null;
+    amount: number;
+    quantityLitres: number;
+    rawText: string;
+    confidence: number;
+  }) => {
+    setVendorName(verified.fillingStation);
+    setAmount(verified.amount.toString());
+    setLitres(verified.quantityLitres.toString());
+    setReceiptDateTime(verified.transactionDateTime);
+    setReceiptConfirmed(true);
+  };
+
+  const handleReceiptRetake = () => {
+    setReceiptPhoto(null);
+    setReceiptHash(null);
+    setReceiptOcr(null);
+    setReceiptConfirmed(false);
+    setReceiptDateTime(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -161,9 +166,15 @@ export default function FuelPurchasePage() {
       return;
     }
 
-    if (paymentMethod === 'personal_fund' && !receiptPhoto) {
-      setErrorMessage('A photograph of the fuel receipt is mandatory for personal-fund purchases.');
-      return;
+    if (paymentMethod === 'personal_fund') {
+      if (!receiptPhoto) {
+        setErrorMessage('A photograph of the fuel receipt is mandatory for personal-fund purchases.');
+        return;
+      }
+      if (!receiptConfirmed) {
+        setErrorMessage('Kindly review and confirm the receipt details before submitting.');
+        return;
+      }
     }
 
     if (odometerChanged && !newOdometerPhoto) {
@@ -197,7 +208,13 @@ export default function FuelPurchasePage() {
           sha256Hash: receiptHash,
           mimeType: 'image/jpeg',
           fileSizeBytes: 280000,
-          metadata: { vendor: vendorName, amount: parsedAmount },
+          metadata: {
+            vendor: vendorName,
+            amount: parsedAmount,
+            quantityLitres: parsedLitres,
+            transactionDateTime: receiptDateTime,
+            ocrConfidence: receiptOcr?.confidence ?? null,
+          },
         });
         receiptEvidenceId = recEv.id;
       }
@@ -510,7 +527,7 @@ export default function FuelPurchasePage() {
               )}
             </div>
 
-            {/* Receipt Capture (Mandatory for Personal Fund) */}
+            {/* Receipt Capture & Verification Step (Mandatory for Personal Fund) */}
             {paymentMethod === 'personal_fund' && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -519,54 +536,74 @@ export default function FuelPurchasePage() {
                     Fuel Purchase Receipt (Mandatory)
                   </h3>
                 </div>
-                <CameraCapture
-                  title="Photograph Fuel Receipt"
-                  instruction="Capture the official receipt showing station name, amount paid, and date."
-                  captureType="receipt"
-                  overlayText="Frame Fuel Receipt Clearly Here"
-                  onCapture={handleReceiptCaptured}
-                />
 
-                {isScanningReceipt && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                    <span>Analyzing fuel receipt via OCR...</span>
+                {!receiptPhoto ? (
+                  <CameraCapture
+                    title="Photograph Fuel Receipt"
+                    instruction="Capture the official receipt showing station name, amount paid, and date."
+                    captureType="receipt"
+                    overlayText="Frame Fuel Receipt Clearly Here"
+                    onCapture={handleReceiptCaptured}
+                  />
+                ) : isScanningReceipt ? (
+                  <div className="p-6 bg-blue-50 border border-blue-200 rounded-2xl text-center space-y-2">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
+                    <p className="text-sm font-bold text-blue-900">Scanning & Extracting Receipt Data...</p>
+                    <p className="text-xs text-blue-700">
+                      Detecting filling station marketer, date/time, total amount, and fuel volume...
+                    </p>
                   </div>
-                )}
-
-                {receiptOcr && !isScanningReceipt && (
-                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs space-y-2">
+                ) : receiptOcr && !receiptConfirmed ? (
+                  <ReceiptConfirmation
+                    imageSrc={receiptPhoto}
+                    ocrResult={receiptOcr}
+                    onConfirm={handleReceiptConfirmed}
+                    onRetake={handleReceiptRetake}
+                  />
+                ) : (
+                  /* Verified Receipt Summary Card */
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3 shadow-xs">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-emerald-900 flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                        Receipt Data Detected
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg">
+                          <CheckCircle2 className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-emerald-900 block">
+                            Receipt Verified & Data Populated
+                          </span>
+                          <span className="text-[11px] text-emerald-700">
+                            Station, date, amount, and litres verified from receipt evidence
+                          </span>
+                        </div>
+                      </div>
                       <button
                         type="button"
-                        onClick={applyReceiptData}
-                        className="py-1 px-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg font-semibold text-[11px] shadow-sm transition-colors"
+                        onClick={() => setReceiptConfirmed(false)}
+                        className="text-xs text-navy-900 hover:text-navy-700 font-bold underline"
                       >
-                        Auto-fill Form from Receipt
+                        Re-verify Details
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-emerald-200/60 text-[11px]">
                       <div>
-                        Station:{' '}
-                        <strong className="block text-slate-900">
-                          {receiptOcr.vendorName || 'Not detected'}
-                        </strong>
+                        <span className="text-slate-500 block">Station:</span>
+                        <span className="font-bold text-slate-900 truncate block">{vendorName || 'N/A'}</span>
                       </div>
                       <div>
-                        Amount:{' '}
-                        <strong className="block text-slate-900">
-                          {receiptOcr.amount ? formatCurrency(receiptOcr.amount) : 'Not detected'}
-                        </strong>
+                        <span className="text-slate-500 block">Date & Time:</span>
+                        <span className="font-bold text-slate-900 block">{receiptDateTime || 'N/A'}</span>
                       </div>
                       <div>
-                        Volume:{' '}
-                        <strong className="block text-slate-900">
-                          {receiptOcr.quantityLitres ? `${receiptOcr.quantityLitres} L` : 'Not detected'}
-                        </strong>
+                        <span className="text-slate-500 block">Quantity:</span>
+                        <span className="font-bold text-slate-900 block">{litres ? `${litres} L` : 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Total:</span>
+                        <span className="font-bold text-slate-900 block">
+                          {amount ? formatCurrency(parseFloat(amount)) : 'N/A'}
+                        </span>
                       </div>
                     </div>
                   </div>

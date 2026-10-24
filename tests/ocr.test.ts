@@ -66,11 +66,11 @@ describe('Odometer Unit Management & Precision Conversion', () => {
 });
 
 describe('OCR Receipt Data Parser', () => {
-  it('should extract vendor name, total amount, and litres from receipt text', () => {
+  it('should extract station name, date/time, total amount, and litres from receipt text', () => {
     const receiptSample = `
       TOTAL ENERGIES FILLING STATION
       Plot 12 Marina, Lagos
-      Date: 22/10/2026
+      Date: 22/10/2026 14:32:00
       PUMP: 04
       PRICE/LTR: 850.00
       LITRES: 45.20 LTR
@@ -78,8 +78,42 @@ describe('OCR Receipt Data Parser', () => {
       THANK YOU FOR YOUR PATRONAGE
     `;
     const res = extractReceiptData(receiptSample);
+    expect(res.fillingStation).toBe('TOTAL ENERGIES FILLING STATION');
     expect(res.vendorName).toBe('TOTAL ENERGIES FILLING STATION');
+    expect(res.transactionDateTime).toBe('22/10/2026 14:32:00');
     expect(res.amount).toBe(38420);
     expect(res.quantityLitres).toBe(45.2);
+  });
+
+  it('should accurately parse NNPC Retail with formatted currency and 12-hour timestamp', () => {
+    const nnpcReceipt = `
+      NNPC RETAIL SERVICE STATION
+      Airport Road, Ikeja
+      Date: 24-Oct-2026 03:45 PM
+      PUMP 02
+      RATE: ₦865.00 / LTR
+      VOLUME: 50.00 LITRES
+      TOTAL PAID: ₦43,250.00
+    `;
+    const res = extractReceiptData(nnpcReceipt);
+    expect(res.fillingStation).toBe('NNPC RETAIL');
+    expect(res.transactionDateTime).toBe('24-Oct-2026 03:45 PM');
+    expect(res.amount).toBe(43250);
+    expect(res.quantityLitres).toBe(50);
+  });
+
+  it('should differentiate unit price from total purchase amount and pump numbers', () => {
+    const complexReceipt = `
+      MOBIL OIL
+      Ikorodu Expressway
+      PUMP: 12
+      RATE PER LTR: 890.00
+      NET AMOUNT: 25,000.00
+      QTY: 28.09 LTRS
+    `;
+    const res = extractReceiptData(complexReceipt);
+    expect(res.fillingStation).toBe('MOBIL SERVICE STATION');
+    expect(res.amount).toBe(25000);
+    expect(res.quantityLitres).toBe(28.09);
   });
 });

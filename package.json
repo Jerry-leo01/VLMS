@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "predev": "node -e \"const fs = require('fs'); try { if (fs.existsSync('.next')) fs.rmSync('.next', { recursive: true, force: true }); } catch (e) {}\"",
     "dev": "next dev",
     "clean": "node -e \"const fs = require('fs'); fs.rmSync('.next', { recursive: true, force: true });\"",
     "build": "next build",

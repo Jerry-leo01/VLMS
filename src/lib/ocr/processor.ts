@@ -14,7 +14,9 @@ export interface OcrResult {
 
 export interface ReceiptOcrResult {
   rawText: string;
+  fillingStation: string | null;
   vendorName: string | null;
+  transactionDateTime: string | null;
   amount: number | null;
   quantityLitres: number | null;
   confidence: number;
@@ -116,7 +118,7 @@ export async function processOdometerImage(imageSource: string | Blob): Promise<
 }
 
 /**
- * Extracts candidate fuel purchase data (Vendor, Amount, Litres) from receipt image.
+ * Extracts candidate fuel purchase data (Vendor/Station, Date/Time, Amount, Litres) from receipt image.
  */
 export async function processReceiptImage(imageSource: string | Blob): Promise<ReceiptOcrResult> {
   try {
@@ -130,7 +132,9 @@ export async function processReceiptImage(imageSource: string | Blob): Promise<R
     const parsed = extractReceiptData(rawText);
     return {
       rawText,
+      fillingStation: parsed.fillingStation,
       vendorName: parsed.vendorName,
+      transactionDateTime: parsed.transactionDateTime,
       amount: parsed.amount,
       quantityLitres: parsed.quantityLitres,
       confidence,
@@ -139,7 +143,9 @@ export async function processReceiptImage(imageSource: string | Blob): Promise<R
     console.error('Receipt OCR processing error:', err);
     return {
       rawText: '',
+      fillingStation: null,
       vendorName: null,
+      transactionDateTime: null,
       amount: null,
       quantityLitres: null,
       confidence: 0,
@@ -147,75 +153,146 @@ export async function processReceiptImage(imageSource: string | Blob): Promise<R
   }
 }
 
-/**
- * Parses raw text from a fuel purchase receipt.
- */
-export function extractReceiptData(text: string): {
+export interface ParsedReceiptData {
+  fillingStation: string | null;
   vendorName: string | null;
+  transactionDateTime: string | null;
   amount: number | null;
   quantityLitres: number | null;
-} {
-  if (!text) return { vendorName: null, amount: null, quantityLitres: null };
+}
+
+/**
+ * Parses raw text from a fuel purchase receipt.
+ * Accurately extracts filling station name, date/time, total amount, and fuel litres.
+ */
+export function extractReceiptData(text: string): ParsedReceiptData {
+  if (!text) {
+    return {
+      fillingStation: null,
+      vendorName: null,
+      transactionDateTime: null,
+      amount: null,
+      quantityLitres: null,
+    };
+  }
 
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
   const upper = text.toUpperCase();
 
-  // 1. Detect Vendor
-  let vendorName: string | null = null;
-  const knownVendors = [
-    'TOTAL ENERGIES FILLING STATION',
-    'TOTAL ENERGIES',
-    'TOTALENERGIES',
-    'TOTAL FILLING STATION',
-    'MOBIL',
-    'NNPC',
-    'OANDO',
-    'CONOIL',
-    'ARDOVA',
-    'AP FILLING STATION',
-    'BOVAS',
-    'SHELL',
+  // 1. Detect Filling Station Name
+  let fillingStation: string | null = null;
+  const knownStations = [
+    { patterns: ['TOTAL ENERGIES', 'TOTALENERGIES', 'TOTAL FILLING', 'TOTAL PETROLEUM'], standard: 'TOTAL ENERGIES FILLING STATION' },
+    { patterns: ['NNPC RETAIL', 'NNPC', 'NIGERIAN NATIONAL PETROLEUM'], standard: 'NNPC RETAIL' },
+    { patterns: ['MOBIL', '11 PLC', 'EXXONMOBIL'], standard: 'MOBIL SERVICE STATION' },
+    { patterns: ['OANDO'], standard: 'OANDO SERVICE STATION' },
+    { patterns: ['CONOIL'], standard: 'CONOIL SERVICE STATION' },
+    { patterns: ['ARDOVA', 'AP FILLING', 'AFRICAN PETROLEUM'], standard: 'ARDOVA PLC (AP)' },
+    { patterns: ['BOVAS'], standard: 'BOVAS FILLING STATION' },
+    { patterns: ['MRS OIL', 'MRS FILLING', 'MRS'], standard: 'MRS OIL SERVICE STATION' },
+    { patterns: ['NIPCO'], standard: 'NIPCO SERVICE STATION' },
+    { patterns: ['SHELL'], standard: 'SHELL SERVICE STATION' },
+    { patterns: ['RAINOIL'], standard: 'RAINOIL SERVICE STATION' },
+    { patterns: ['MATRIX ENERGY', 'MATRIX'], standard: 'MATRIX ENERGY' },
+    { patterns: ['NORTHWEST PETROLEUM', 'NORTHWEST'], standard: 'NORTHWEST PETROLEUM' },
   ];
 
-  for (const v of knownVendors) {
-    if (upper.includes(v)) {
-      vendorName = v.startsWith('TOTAL') ? 'TOTAL ENERGIES FILLING STATION' : v;
+  for (const station of knownStations) {
+    if (station.patterns.some((p) => upper.includes(p))) {
+      fillingStation = station.standard;
       break;
     }
   }
 
-  // Fallback vendor to first non-empty line if plausible
-  if (!vendorName && lines.length > 0) {
-    const firstLine = lines[0].replace(/[^A-Za-z\s]/g, '').trim();
-    if (firstLine.length >= 3 && firstLine.length <= 40) {
-      vendorName = firstLine;
-    }
-  }
-
-  // 2. Detect Amount (look for Total, Amount, NGN, Naira, Sum)
-  let amount: number | null = null;
-  const amountRegex = /(?:TOTAL|AMOUNT|NET|PAID|NGN|₦|SUM)[:\s]*([0-9,]+(?:\.[0-9]{2})?)/i;
-  const amountMatch = text.match(amountRegex);
-  if (amountMatch && amountMatch[1]) {
-    const num = parseFloat(amountMatch[1].replace(/,/g, ''));
-    if (!isNaN(num) && num > 0) amount = num;
-  }
-
-  // Fallback: look for largest number in receipt between 1000 and 500000
-  if (!amount) {
-    const numbers = text.match(/\b\d{4,6}(?:\.\d{2})?\b/g);
-    if (numbers) {
-      const candidates = numbers.map((n) => parseFloat(n)).filter((n) => n >= 1000 && n <= 500000);
-      if (candidates.length > 0) {
-        amount = Math.max(...candidates);
+  // Fallback filling station to first plausible brand line
+  if (!fillingStation && lines.length > 0) {
+    const ignoredKeywords = /RECEIPT|CUSTOMER|WELCOME|INVOICE|PUMP|DATE|TIME|CASH|CARD|TERMINAL|MERCHANT|SLIP/i;
+    for (const line of lines.slice(0, 5)) {
+      if (ignoredKeywords.test(line)) continue;
+      const cleaned = line.replace(/[^A-Za-z0-9\s&.-]/g, '').trim();
+      if (cleaned.length >= 3 && cleaned.length <= 50) {
+        fillingStation = cleaned;
+        break;
       }
     }
   }
 
-  // 3. Detect Fuel Quantity (Litres, LTR, Qty, Vol)
+  // 2. Detect Date & Time of Transaction
+  let extractedDate: string | null = null;
+  let extractedTime: string | null = null;
+
+  // Look for date patterns (e.g. 22/10/2026, 2026-10-22, 22-10-2026, 22-Oct-2026)
+  const numericDateMatch = text.match(/\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})\b/);
+  if (numericDateMatch) {
+    extractedDate = numericDateMatch[1];
+  } else {
+    const wordDateMatch = text.match(/\b(\d{1,2}[-\s](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-\s,]+\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?[,\s]+\d{2,4})\b/i);
+    if (wordDateMatch) {
+      extractedDate = wordDateMatch[1].trim();
+    }
+  }
+
+  // Look for time patterns (e.g. 14:32:00, 14:32, 02:30 PM)
+  const timeMatch = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\s*(AM|PM)?\b/i);
+  if (timeMatch) {
+    extractedTime = timeMatch[0].trim();
+  }
+
+  let transactionDateTime: string | null = null;
+  if (extractedDate && extractedTime) {
+    transactionDateTime = `${extractedDate} ${extractedTime}`;
+  } else if (extractedDate) {
+    transactionDateTime = extractedDate;
+  }
+
+  // 3. Detect Amount (Total, Net, Paid, Payment, Sum) avoiding unit price / rate lines
+  let amount: number | null = null;
+  for (const line of lines) {
+    if (/PRICE|RATE|\/L|PER/i.test(line)) continue;
+    const match = line.match(/(?:TOTAL|AMOUNT|NET|PAID|PAYMENT|SUM)[:\s]*(?:NGN|₦)?[:\s]*([0-9,]+(?:\.[0-9]{2})?)/i);
+    if (match && match[1]) {
+      const num = parseFloat(match[1].replace(/,/g, ''));
+      if (!isNaN(num) && num > 0) {
+        amount = num;
+        break;
+      }
+    }
+  }
+
+  // Check lines with currency symbols ₦ or NGN without RATE/PRICE
+  if (!amount) {
+    for (const line of lines) {
+      if (/PRICE|RATE|\/L|PER/i.test(line)) continue;
+      const match = line.match(/(?:NGN|₦)\s*([0-9,]+(?:\.[0-9]{2})?)/i);
+      if (match && match[1]) {
+        const num = parseFloat(match[1].replace(/,/g, ''));
+        if (!isNaN(num) && num > 0) {
+          amount = num;
+          break;
+        }
+      }
+    }
+  }
+
+  // Fallback: search for numbers between 1000 and 500000 on lines not marked as unit price or meter
+  if (!amount) {
+    for (const line of lines) {
+      if (/PRICE|RATE|\/L|PER|PUMP|DATE|TIME/i.test(line)) continue;
+      const numbers = line.match(/\b\d{4,6}(?:\.\d{2})?\b/g);
+      if (numbers) {
+        const candidates = numbers.map((n) => parseFloat(n)).filter((n) => n >= 1000 && n <= 500000);
+        if (candidates.length > 0) {
+          amount = Math.max(...candidates);
+          break;
+        }
+      }
+    }
+  }
+
+  // 4. Detect Fuel Quantity (Litres, LTR, Qty, Vol)
   let quantityLitres: number | null = null;
   for (const line of lines) {
-    if (/PRICE/i.test(line)) continue;
+    if (/PRICE|RATE|\/L|PER/i.test(line)) continue;
     const match = line.match(/(?:LITRES?|LTRS?|QTY|VOLUME|VOL)[:\s]*([0-9,]+(?:\.[0-9]{1,2})?)/i);
     if (match && match[1]) {
       const num = parseFloat(match[1].replace(/,/g, ''));
@@ -229,7 +306,7 @@ export function extractReceiptData(text: string): {
   // Fallback if not matched with prefix, look for numbers ending with L or LTR (ignoring price line)
   if (!quantityLitres) {
     for (const line of lines) {
-      if (/PRICE|TOTAL|AMOUNT|NGN|₦/i.test(line)) continue;
+      if (/PRICE|RATE|TOTAL|AMOUNT|NGN|₦|\/L|PER/i.test(line)) continue;
       const match = line.match(/\b([0-9]{1,3}(?:\.[0-9]{1,2})?)\s*(?:LTRS?|LITRES?|L)\b/i);
       if (match && match[1]) {
         const num = parseFloat(match[1]);
@@ -241,7 +318,13 @@ export function extractReceiptData(text: string): {
     }
   }
 
-  return { vendorName, amount, quantityLitres };
+  return {
+    fillingStation,
+    vendorName: fillingStation,
+    transactionDateTime,
+    amount,
+    quantityLitres,
+  };
 }
 
 /**
