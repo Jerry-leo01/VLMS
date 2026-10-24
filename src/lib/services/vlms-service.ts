@@ -162,8 +162,8 @@ const store: DataStore = {
   tomCards: [
     {
       id: 'tc-01',
-      card_reference: 'TOM-LAG-001',
-      masked_card_number: '7004 **** **** 1024',
+      card_reference: '804689',
+      masked_card_number: '804689',
       vehicle_id: 'v-toyota-hilux',
       user_id: 'p-staff-01',
       status: 'active',
@@ -176,7 +176,7 @@ const store: DataStore = {
       id: 'reg-demo-pending',
       user_id: 'p-pending-01',
       requested_plate_number: 'ABJ-194LK',
-      requested_tom_card: '7004 **** **** 3819',
+      requested_tom_card: '804690',
       requested_office_id: '22222222-2222-2222-2222-222222222222',
       status: 'pending',
       reviewer_id: null,

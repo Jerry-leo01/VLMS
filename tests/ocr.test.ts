@@ -4,6 +4,7 @@ import {
   extractOdometerDetails,
   detectOdometerUnit,
   extractReceiptData,
+  extractDashboardTelemetry,
 } from '../src/lib/ocr/processor';
 import { convertOdometerReading, toCanonicalKm, MILES_TO_KM } from '../src/lib/utils';
 
@@ -115,5 +116,15 @@ describe('OCR Receipt Data Parser', () => {
     expect(res.fillingStation).toBe('MOBIL SERVICE STATION');
     expect(res.amount).toBe(25000);
     expect(res.quantityLitres).toBe(28.09);
+  });
+});
+
+describe('Computer Vision Dashboard Telemetry Extraction', () => {
+  it('should accurately extract telemetry data and convert MPH to KM', () => {
+    const telemetry = extractDashboardTelemetry('057612', 'MPH');
+    expect(telemetry.odometer_reading).toBe('057612');
+    expect(telemetry.primary_unit).toBe('MPH');
+    // 57612 * 1.60934 = 92717.29608 -> 92717.3
+    expect(telemetry.converted_to_km).toBe(92717.3);
   });
 });

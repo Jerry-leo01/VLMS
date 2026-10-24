@@ -22,6 +22,33 @@ export interface ReceiptOcrResult {
   confidence: number;
 }
 
+export interface DashboardTelemetry {
+  odometer_reading: string;
+  primary_unit: 'MPH' | 'km/h';
+  converted_to_km: number;
+}
+
+/**
+ * Normalizes and converts dashboard telemetry from camera inspection.
+ * Preserves exact digit string with leading zeros and converts MPH to KM using 1.60934 factor.
+ */
+export function extractDashboardTelemetry(
+  odometerDigits: string,
+  primaryUnit: 'MPH' | 'km/h'
+): DashboardTelemetry {
+  const numericVal = parseFloat(odometerDigits);
+  const converted =
+    primaryUnit === 'MPH'
+      ? Math.round(numericVal * 1.60934 * 100) / 100
+      : numericVal;
+
+  return {
+    odometer_reading: odometerDigits,
+    primary_unit: primaryUnit,
+    converted_to_km: converted,
+  };
+}
+
 /**
  * Preprocesses an image to improve OCR accuracy on LCD/digital odometer clusters.
  * Performs grayscale conversion and contrast stretching.

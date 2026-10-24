@@ -377,80 +377,66 @@ export default function FuelPurchasePage() {
               </div>
             </div>
 
-            {/* Card / Vendor Details */}
+            {/* TOM Card Details & Fuel Metrics (For TOM Card Purchases Only) */}
             {paymentMethod === 'tom_card' ? (
-              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="text-xs font-semibold text-slate-700">Assigned Card</span>
-                  <span className="text-xs font-mono font-bold text-navy-900">
-                    {tomCard?.masked_card_number ?? '7004 **** **** 1024'}
-                  </span>
+              <div className="space-y-3">
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="text-xs font-semibold text-slate-700">Assigned TOM Number</span>
+                    <span className="text-xs font-mono font-bold text-navy-900 bg-slate-100 px-2.5 py-0.5 rounded">
+                      {tomCard?.masked_card_number ?? '804689'}
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700">Vendor (Fixed)</label>
+                    <input
+                      type="text"
+                      disabled
+                      value="TOTAL ENERGIES FILLING STATION"
+                      className="mt-1 w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 cursor-not-allowed"
+                    />
+                    <span className="text-[11px] text-slate-400 mt-1 block">
+                      TOM Card transactions are policy-restricted to TotalEnergies stations.
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700">Vendor (Fixed)</label>
-                  <input
-                    type="text"
-                    disabled
-                    value="TOTAL ENERGIES FILLING STATION"
-                    className="mt-1 w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 cursor-not-allowed"
-                  />
-                  <span className="text-[11px] text-slate-400 mt-1 block">
-                    TOM Card transactions are policy-restricted to TotalEnergies stations.
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700">
-                    Filling Station / Vendor Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={vendorName}
-                    onChange={(e) => setVendorName(e.target.value)}
-                    placeholder="e.g. Mobil Oil Service Station, Ikeja"
-                    className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
-                  />
-                </div>
-              </div>
-            )}
 
-            {/* Amount & Litres */}
-            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700">
-                  Total Amount (NGN ₦) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="1"
-                  required
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="e.g. 35000"
-                  className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
-                />
-              </div>
+                {/* Amount & Litres for TOM Card */}
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Total Amount (NGN ₦) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="1"
+                      required
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="e.g. 35000"
+                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700">
-                  Fuel Quantity (Litres) <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  required
-                  value={litres}
-                  onChange={(e) => setLitres(e.target.value)}
-                  placeholder="e.g. 40.5"
-                  className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
-                />
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Fuel Quantity (Litres) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      required
+                      value={litres}
+                      onChange={(e) => setLitres(e.target.value)}
+                      placeholder="e.g. 40.5"
+                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : null}
 
             {/* Smart Odometer Verification & Evidence Reuse */}
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-4">

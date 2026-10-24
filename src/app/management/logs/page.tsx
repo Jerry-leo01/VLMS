@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
+import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { DailyLog } from '@/types/database';
 import { formatOdometer, formatDateTime } from '@/lib/utils';
@@ -43,11 +44,9 @@ export default function ManagementLogsPage() {
       <Navbar userRole="administrator" userName="Babajide Adeleke (Admin)" />
 
       <div className="flex-1 flex">
-        <div className="hidden lg:block">
-          <ManagementSidebar />
-        </div>
+        <ManagementSidebar />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full pb-24 lg:pb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div className="flex items-center gap-2">
               <Link
@@ -77,57 +76,91 @@ export default function ManagementLogsPage() {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="py-3 px-4">Business Date</th>
-                  <th className="py-3 px-4">Vehicle Plate</th>
-                  <th className="py-3 px-4">Staff Member</th>
-                  <th className="py-3 px-4">Confirmed Odometer</th>
-                  <th className="py-3 px-4">OCR Proposed</th>
-                  <th className="py-3 px-4">GPS Accuracy</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Submitted At</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filtered.length === 0 ? (
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-400">
-                      No daily logs found.
-                    </td>
+                    <th className="py-3 px-4">Business Date</th>
+                    <th className="py-3 px-4">Vehicle Plate</th>
+                    <th className="py-3 px-4">Staff Member</th>
+                    <th className="py-3 px-4">Confirmed Odometer</th>
+                    <th className="py-3 px-4">OCR Proposed</th>
+                    <th className="py-3 px-4">GPS Accuracy</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Submitted At</th>
                   </tr>
-                ) : (
-                  filtered.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4 font-mono font-semibold text-slate-800">{log.business_date}</td>
-                      <td className="py-3 px-4 font-mono font-bold text-navy-950">{log.vehicle?.plate_number}</td>
-                      <td className="py-3 px-4 font-medium text-slate-800">{log.user?.full_name}</td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-900">{formatOdometer(log.odometer_km)}</td>
-                      <td className="py-3 px-4 text-slate-500">
-                        {log.ocr_reading_km ? `${log.ocr_reading_km} km (${log.ocr_confidence}%)` : '-'}
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-400">
+                        No daily logs found.
                       </td>
-                      <td className="py-3 px-4 text-slate-500">
-                        {log.gps_accuracy_m ? `±${log.gps_accuracy_m} m` : 'Attached'}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase ${
-                            log.status === 'flagged' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                          }`}
-                        >
-                          {log.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-400">{formatDateTime(log.submitted_at)}</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    filtered.map((log) => (
+                      <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4 font-mono font-semibold text-slate-800">{log.business_date}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-navy-950">{log.vehicle?.plate_number}</td>
+                        <td className="py-3 px-4 font-medium text-slate-800">{log.user?.full_name}</td>
+                        <td className="py-3 px-4 font-mono font-bold text-slate-900">{formatOdometer(log.odometer_km)}</td>
+                        <td className="py-3 px-4 text-slate-500">
+                          {log.ocr_reading_km ? `${log.ocr_reading_km} km (${log.ocr_confidence}%)` : '-'}
+                        </td>
+                        <td className="py-3 px-4 text-slate-500">
+                          {log.gps_accuracy_m ? `±${log.gps_accuracy_m} m` : 'Attached'}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase ${
+                              log.status === 'flagged' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
+                            {log.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-slate-400">{formatDateTime(log.submitted_at)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card List */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {filtered.length === 0 ? (
+                <div className="p-6 text-center text-slate-400 text-xs">No daily logs found.</div>
+              ) : (
+                filtered.map((log) => (
+                  <div key={log.id} className="p-4 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-sm text-navy-950">{log.vehicle?.plate_number}</span>
+                      <span className="text-slate-400 font-mono text-[11px]">{log.business_date}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-slate-600">
+                      <span>Staff: <strong className="text-slate-900">{log.user?.full_name}</strong></span>
+                      <span className="font-mono font-bold text-slate-900 text-sm">{formatOdometer(log.odometer_km)}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-1">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                          log.status === 'flagged' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}
+                      >
+                        {log.status}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">{formatDateTime(log.submitted_at)}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </main>
       </div>
+
+      <ManagementBottomNav />
     </div>
   );
 }

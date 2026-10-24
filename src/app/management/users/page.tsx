@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
+import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { Profile } from '@/types/database';
 import { Users, ArrowLeft, Search, ShieldCheck } from 'lucide-react';
@@ -29,11 +30,9 @@ export default function UsersManagementPage() {
       <Navbar userRole="administrator" userName="Babajide Adeleke (Admin)" />
 
       <div className="flex-1 flex">
-        <div className="hidden lg:block">
-          <ManagementSidebar />
-        </div>
+        <ManagementSidebar />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full pb-24 lg:pb-8">
           <div className="flex items-center gap-2 border-b border-slate-200 pb-4">
             <Link
               href="/management"
@@ -54,7 +53,7 @@ export default function UsersManagementPage() {
               <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="py-3 px-4">Full Name</th>
-                  <th className="py-3 px-4">Employee ID</th>
+                  <th className="py-3 px-4">Phone Number</th>
                   <th className="py-3 px-4">Assigned Roles</th>
                   <th className="py-3 px-4">Office Location</th>
                   <th className="py-3 px-4">Status</th>
@@ -64,7 +63,7 @@ export default function UsersManagementPage() {
                 {users.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3 px-4 font-bold text-slate-900">{u.full_name}</td>
-                    <td className="py-3 px-4 font-mono text-slate-600">{u.employee_id ?? '-'}</td>
+                    <td className="py-3 px-4 font-mono text-slate-600">{u.phone_number ?? '-'}</td>
                     <td className="py-3 px-4">
                       {u.roles?.map((r) => (
                         <span key={r} className="px-2 py-0.5 rounded text-[11px] font-semibold bg-navy-100 text-navy-800 uppercase mr-1">
@@ -85,6 +84,8 @@ export default function UsersManagementPage() {
           </div>
         </main>
       </div>
+
+      <ManagementBottomNav />
     </div>
   );
 }

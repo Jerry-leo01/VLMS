@@ -66,10 +66,10 @@ export default function StaffProfilePage() {
 
             <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
               <span className="text-slate-500 flex items-center gap-2">
-                <CreditCard className="w-4 h-4 text-navy-800" /> Assigned TOM Card
+                <CreditCard className="w-4 h-4 text-navy-800" /> Assigned TOM Number
               </span>
-              <span className="font-mono font-bold text-navy-950">
-                {tomCard?.masked_card_number ?? '7004 **** **** 1024'}
+              <span className="font-mono font-bold text-navy-950 bg-slate-100 px-2.5 py-0.5 rounded">
+                {tomCard?.masked_card_number ?? '804689'}
               </span>
             </div>
 

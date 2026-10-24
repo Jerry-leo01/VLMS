@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
+import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { Vehicle } from '@/types/database';
 import { formatOdometer } from '@/lib/utils';
@@ -43,11 +44,9 @@ export default function VehiclesManagementPage() {
       <Navbar userRole="administrator" userName="Babajide Adeleke (Admin)" />
 
       <div className="flex-1 flex">
-        <div className="hidden lg:block">
-          <ManagementSidebar />
-        </div>
+        <ManagementSidebar />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full pb-24 lg:pb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div className="flex items-center gap-2">
               <Link
@@ -122,6 +121,8 @@ export default function VehiclesManagementPage() {
           </div>
         </main>
       </div>
+
+      <ManagementBottomNav />
     </div>
   );
 }

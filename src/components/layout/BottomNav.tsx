@@ -18,7 +18,7 @@ export function BottomNav() {
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 shadow-lg px-2 py-1 flex justify-around items-center">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800 shadow-lg px-2 py-1 flex justify-around items-center transition-colors">
       {links.map((item) => {
         const Icon = item.icon;
         const isActive = pathname === item.href;
@@ -28,10 +28,19 @@ export function BottomNav() {
             href={item.href}
             className={cn(
               'flex flex-col items-center justify-center py-1 px-3 rounded-lg text-xs font-medium transition-colors',
-              isActive ? 'text-navy-900 font-bold' : 'text-slate-500 hover:text-slate-900'
+              isActive
+                ? 'text-navy-900 dark:text-blue-400 font-bold'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
             )}
           >
-            <Icon className={cn('w-5 h-5 mb-0.5', isActive ? 'text-navy-900 stroke-[2.5]' : 'text-slate-500')} />
+            <Icon
+              className={cn(
+                'w-5 h-5 mb-0.5',
+                isActive
+                  ? 'text-navy-900 dark:text-blue-400 stroke-[2.5]'
+                  : 'text-slate-500 dark:text-slate-400'
+              )}
+            />
             <span>{item.label}</span>
           </Link>
         );

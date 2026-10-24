@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
+import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { getBusinessDate } from '@/lib/utils';
 import { FileDown, ArrowLeft, CheckCircle2, FileSpreadsheet } from 'lucide-react';
@@ -76,11 +77,9 @@ export default function ReportsExportPage() {
       <Navbar userRole="administrator" userName="Babajide Adeleke (Admin)" />
 
       <div className="flex-1 flex">
-        <div className="hidden lg:block">
-          <ManagementSidebar />
-        </div>
+        <ManagementSidebar />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full pb-24 lg:pb-8">
           <div className="flex items-center gap-2 border-b border-slate-200 pb-4">
             <Link
               href="/management"
@@ -143,6 +142,8 @@ export default function ReportsExportPage() {
           </div>
         </main>
       </div>
+
+      <ManagementBottomNav />
     </div>
   );
 }

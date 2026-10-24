@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
+import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { DailyLog, AnomalyAlert } from '@/types/database';
 import { formatCurrency, formatOdometer, formatDateTime, getBusinessDate } from '@/lib/utils';
@@ -74,12 +75,10 @@ export default function ManagementDashboardPage() {
 
       <div className="flex-1 flex">
         {/* Management Sidebar */}
-        <div className="hidden lg:block">
-          <ManagementSidebar />
-        </div>
+        <ManagementSidebar />
 
         {/* Dashboard Content */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full pb-24 lg:pb-8">
           {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
@@ -273,6 +272,8 @@ export default function ManagementDashboardPage() {
           </div>
         </main>
       </div>
+
+      <ManagementBottomNav />
     </div>
   );
 }

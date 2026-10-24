@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
+import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { RegistrationRequest } from '@/types/database';
 import { formatDateTime } from '@/lib/utils';
@@ -67,11 +68,9 @@ export default function ApprovalsQueuePage() {
       <Navbar userRole="administrator" userName="Babajide Adeleke (Admin)" />
 
       <div className="flex-1 flex">
-        <div className="hidden lg:block">
-          <ManagementSidebar />
-        </div>
+        <ManagementSidebar />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full pb-24 lg:pb-8">
           <div className="flex items-center gap-2 border-b border-slate-200 pb-4">
             <Link
               href="/management"
@@ -111,7 +110,7 @@ export default function ApprovalsQueuePage() {
                           {req.user?.full_name ?? 'Staff Applicant'}
                         </h3>
                         <span className="text-xs text-slate-500">
-                          Employee ID: {req.user?.employee_id ?? 'None'} • {req.requested_office?.name ?? 'Office'}
+                          Phone: {req.user?.phone_number ?? 'None'} • {req.requested_office?.name ?? 'Office'}
                         </span>
                       </div>
                       <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-amber-100 text-amber-800">
@@ -127,8 +126,8 @@ export default function ApprovalsQueuePage() {
                         </span>
                       </div>
                       <div className="p-2.5 bg-slate-50 rounded-lg">
-                        <span className="text-slate-400 block">TOM Card</span>
-                        <span className="font-mono text-slate-700">
+                        <span className="text-slate-400 block">TOM Number</span>
+                        <span className="font-mono text-slate-700 font-bold">
                           {req.requested_tom_card || 'None specified'}
                         </span>
                       </div>
@@ -236,6 +235,8 @@ export default function ApprovalsQueuePage() {
           </div>
         </div>
       )}
+
+      <ManagementBottomNav />
     </div>
   );
 }

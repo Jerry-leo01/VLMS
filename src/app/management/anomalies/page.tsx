@@ -4,17 +4,29 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
+import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { AnomalyAlert } from '@/types/database';
 import { formatDateTime, formatAnomalyText } from '@/lib/utils';
 import { AlertTriangle, CheckCircle2, Search, ArrowLeft, ShieldAlert, Eye, MessageSquare } from 'lucide-react';
+
+const STANDARD_RESOLUTION_RESPONSES = [
+  'Verified with staff member; odometer cluster was calibrated during scheduled maintenance.',
+  'Verified physical fuel purchase receipt and vendor pump meter reading.',
+  'Confirmed official business route deviation due to approved road construction/detour.',
+  'Confirmed legitimate off-hours travel with prior management authorization.',
+  'Trip meter reset verified on vehicle instrument cluster after scheduled service.',
+  'Optical sensor glitch / false positive reading confirmed after manual vehicle inspection.',
+  'Others',
+];
 
 export default function AnomalyManagementPage() {
   const [alerts, setAlerts] = useState<AnomalyAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedAlert, setSelectedAlert] = useState<AnomalyAlert | null>(null);
   const [newStatus, setNewStatus] = useState<'investigating' | 'resolved' | 'dismissed'>('resolved');
-  const [resolutionNote, setResolutionNote] = useState('');
+  const [selectedPresetNote, setSelectedPresetNote] = useState<string>(STANDARD_RESOLUTION_RESPONSES[0]);
+  const [customNote, setCustomNote] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const loadAlerts = async () => {
@@ -35,10 +47,16 @@ export default function AnomalyManagementPage() {
   const handleResolve = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedAlert) return;
+    const finalNote = selectedPresetNote === 'Others' ? customNote.trim() : selectedPresetNote;
+    if (!finalNote) {
+      alert('Please provide a resolution note.');
+      return;
+    }
     try {
-      await VLMSService.resolveAnomaly(selectedAlert.id, 'p-admin-01', newStatus, resolutionNote);
+      await VLMSService.resolveAnomaly(selectedAlert.id, 'p-admin-01', newStatus, finalNote);
       setSelectedAlert(null);
-      setResolutionNote('');
+      setSelectedPresetNote(STANDARD_RESOLUTION_RESPONSES[0]);
+      setCustomNote('');
       await loadAlerts();
     } catch (err) {
       alert((err as Error).message);
@@ -55,11 +73,9 @@ export default function AnomalyManagementPage() {
       <Navbar userRole="administrator" userName="Babajide Adeleke (Admin)" />
 
       <div className="flex-1 flex">
-        <div className="hidden lg:block">
-          <ManagementSidebar />
-        </div>
+        <ManagementSidebar />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto w-full pb-24 lg:pb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
             <div className="flex items-center gap-2">
               <Link
@@ -204,15 +220,34 @@ export default function AnomalyManagementPage() {
                 <label className="block text-xs font-semibold text-slate-700">
                   Supervisor Resolution Note <span className="text-red-500">*</span>
                 </label>
-                <textarea
-                  required
-                  rows={3}
-                  value={resolutionNote}
-                  onChange={(e) => setResolutionNote(e.target.value)}
-                  placeholder="e.g. Verified with staff member; vehicle odometer cluster was calibrated during scheduled maintenance."
-                  className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
-                />
+                <select
+                  value={selectedPresetNote}
+                  onChange={(e) => setSelectedPresetNote(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                >
+                  {STANDARD_RESOLUTION_RESPONSES.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
               </div>
+
+              {selectedPresetNote === 'Others' && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Specify Custom Supervisory Details <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={customNote}
+                    onChange={(e) => setCustomNote(e.target.value)}
+                    placeholder="Enter specific explanation and supervisory findings for this anomaly..."
+                    className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                  />
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <button
@@ -233,6 +268,8 @@ export default function AnomalyManagementPage() {
           </div>
         </div>
       )}
+
+      <ManagementBottomNav />
     </div>
   );
 }
