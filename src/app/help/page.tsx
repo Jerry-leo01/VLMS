@@ -20,7 +20,7 @@ export default function HelpPage() {
             <HelpCircle className="w-4 h-4" />
             Operational Guide & FAQ
           </div>
-          <h1 className="text-3xl font-extrabold text-navy-900">Driver & Fleet Support</h1>
+          <h1 className="text-3xl font-extrabold text-navy-900">Staff & Fleet Support</h1>
           <p className="text-xs text-slate-500">Need assistance recording an odometer reading or submitting fuel transactions?</p>
         </div>
 
@@ -41,7 +41,7 @@ export default function HelpPage() {
               Can I record more than one fuel purchase in a single day?
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Yes. While the system restricts daily odometer logs to exactly one official entry per vehicle per business date, drivers are permitted to submit multiple fuel purchases (TOM Card or Personal Funds) as needed throughout the day.
+              Yes. While the system restricts daily odometer logs to exactly one official entry per vehicle per business date, authorized staff members are permitted to submit multiple fuel purchases (TOM Card or Personal Funds) as needed throughout the day.
             </p>
           </div>
 
@@ -51,7 +51,7 @@ export default function HelpPage() {
               Why is my registration status marked as &ldquo;Pending&rdquo;?
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              For fleet asset security, every new driver registration must be verified and approved by the Fleet Administrator before vehicle logs or fuel transactions can be submitted. Contact your fleet supervisor if your account has not been approved within 24 hours.
+              For fleet asset security, every new staff registration must be verified and approved by the Fleet Administrator before vehicle logs or fuel transactions can be submitted. Contact your fleet supervisor if your account has not been approved within 24 hours.
             </p>
           </div>
 

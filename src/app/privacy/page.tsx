@@ -32,7 +32,7 @@ export default function PrivacyPage() {
 
           <h2 className="text-base font-bold text-navy-900">2. Photographic Evidence & In-Browser OCR</h2>
           <p className="text-xs text-slate-600">
-            Drivers photograph vehicle dashboard odometers and fuel receipts. OCR processing runs in-browser to propose reading values. Captured photographs are stored in private, encrypted cloud storage buckets. Access is strictly granted to authorized fleet managers, auditors, and department heads via short-lived signed URLs. Permanent public URLs are never generated.
+            Authorized staff photograph vehicle dashboard odometers and fuel receipts. OCR processing runs in-browser to propose reading values. Captured photographs are stored in private, encrypted cloud storage buckets. Access is strictly granted to authorized fleet managers, auditors, and department heads via short-lived signed URLs. Permanent public URLs are never generated.
           </p>
 
           <h2 className="text-base font-bold text-navy-900">3. Geolocation Data</h2>

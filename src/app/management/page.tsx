@@ -115,8 +115,8 @@ export default function ManagementDashboardPage() {
               <div className="flex items-center gap-3 text-xs text-amber-900">
                 <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
                 <div>
-                  <strong>{metrics.pendingApprovals} Pending Driver Registration Request(s)</strong>
-                  <p className="text-amber-800">Drivers are waiting for vehicle and TOM card assignment authorization.</p>
+                  <strong>{metrics.pendingApprovals} Pending Staff Registration Request(s)</strong>
+                  <p className="text-amber-800">Staff members are waiting for vehicle and TOM card assignment authorization.</p>
                 </div>
               </div>
               <Link
@@ -204,7 +204,7 @@ export default function ManagementDashboardPage() {
                 <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 <input
                   type="text"
-                  placeholder="Filter by plate, driver..."
+                  placeholder="Filter by plate, staff..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs w-full sm:w-64 focus:bg-white focus:outline-none focus:ring-1 focus:ring-navy-800"
@@ -218,7 +218,7 @@ export default function ManagementDashboardPage() {
                   <tr>
                     <th className="py-3 px-4">Date / Time</th>
                     <th className="py-3 px-4">Vehicle Plate</th>
-                    <th className="py-3 px-4">Staff Driver</th>
+                    <th className="py-3 px-4">Staff Member</th>
                     <th className="py-3 px-4">Confirmed Odometer</th>
                     <th className="py-3 px-4">OCR Proposal</th>
                     <th className="py-3 px-4">GPS Accuracy</th>

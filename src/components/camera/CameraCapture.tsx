@@ -4,7 +4,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Camera, RefreshCw, Check, Upload, AlertCircle } from 'lucide-react';
 
 interface CameraCaptureProps {
-  onCapture: (imageDataUrl: string, hash: string) => void;
+  onCapture: (imageDataUrl: string, hash: string, roiDataUrl?: string) => void;
   title?: string;
   instruction?: string;
   overlayText?: string;
@@ -24,6 +24,7 @@ export function CameraCapture({
 
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedRoi, setCapturedRoi] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
@@ -112,6 +113,28 @@ export function CameraCapture({
     }
   };
 
+  // Helper to extract Region of Interest (ROI) centered around framing guide
+  const extractRoiCrop = (sourceCanvas: HTMLCanvasElement): string | null => {
+    try {
+      const roiCanvas = document.createElement('canvas');
+      const roiWidth = Math.round(sourceCanvas.width * 0.75);
+      const roiHeight = Math.round(sourceCanvas.height * 0.45);
+      const roiX = Math.round((sourceCanvas.width - roiWidth) / 2);
+      const roiY = Math.round((sourceCanvas.height - roiHeight) / 2);
+
+      roiCanvas.width = roiWidth;
+      roiCanvas.height = roiHeight;
+      const roiCtx = roiCanvas.getContext('2d');
+      if (roiCtx) {
+        roiCtx.drawImage(sourceCanvas, roiX, roiY, roiWidth, roiHeight, 0, 0, roiWidth, roiHeight);
+        return roiCanvas.toDataURL('image/jpeg', 0.90);
+      }
+    } catch {
+      // Fallback if ROI crop fails
+    }
+    return null;
+  };
+
   // Capture frame
   const takeSnapshot = async () => {
     if (!videoRef.current) return;
@@ -125,8 +148,11 @@ export function CameraCapture({
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const roiUrl = captureType === 'odometer' ? extractRoiCrop(canvas) : null;
+
     stopCamera();
     setCapturedImage(dataUrl);
+    setCapturedRoi(roiUrl);
   };
 
   // Handle fallback file selection
@@ -139,6 +165,22 @@ export function CameraCapture({
     reader.onload = async () => {
       const dataUrl = reader.result as string;
       setCapturedImage(dataUrl);
+
+      if (captureType === 'odometer') {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            setCapturedRoi(extractRoiCrop(canvas));
+          }
+        };
+        img.src = dataUrl;
+      }
+
       setIsProcessing(false);
     };
     reader.readAsDataURL(file);
@@ -149,11 +191,12 @@ export function CameraCapture({
     setIsProcessing(true);
     const hash = await computeSha256(capturedImage);
     setIsProcessing(false);
-    onCapture(capturedImage, hash);
+    onCapture(capturedImage, hash, capturedRoi || undefined);
   };
 
   const handleRetake = () => {
     setCapturedImage(null);
+    setCapturedRoi(null);
     startCamera();
   };
 

@@ -37,7 +37,7 @@ export function ManagementSidebar() {
       title: 'Fleet Assets',
       items: [
         { href: '/management/vehicles', label: 'Vehicles Directory', icon: Car },
-        { href: '/management/users', label: 'Staff & Drivers', icon: Users },
+        { href: '/management/users', label: 'Fleet Staff', icon: Users },
         { href: '/management/tom-cards', label: 'TOM Cards', icon: CreditCard },
       ],
     },

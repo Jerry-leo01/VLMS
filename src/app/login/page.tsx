@@ -141,7 +141,7 @@ export default function LoginPage() {
                 onClick={() => setDemoRole('staff')}
                 className="py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs font-medium"
               >
-                Staff (Driver)
+                Staff Member
               </button>
               <button
                 type="button"
@@ -161,7 +161,7 @@ export default function LoginPage() {
           </div>
 
           <div className="text-center text-xs text-slate-500 pt-2">
-            New vehicle driver?{' '}
+            New vehicle staff?{' '}
             <Link href="/register" className="font-semibold text-navy-900 hover:underline">
               Submit registration request
             </Link>

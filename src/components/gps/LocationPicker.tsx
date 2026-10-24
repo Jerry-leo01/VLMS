@@ -9,7 +9,27 @@ interface LocationPickerProps {
     longitude: number;
     accuracyM: number;
     capturedAt: string;
+    locationName?: string;
   }) => void;
+}
+
+export function resolveApproximateLocation(lat: number, lon: number): string {
+  if (lat >= 6.3 && lat <= 6.7 && lon >= 3.2 && lon <= 3.7) {
+    return 'Lagos Metropolitan Area (Head Office / Lagos Branch)';
+  } else if (lat >= 8.9 && lat <= 9.2 && lon >= 7.3 && lon <= 7.6) {
+    return 'Abuja FCT (North Central Branch)';
+  } else if (lat >= 4.7 && lat <= 5.0 && lon >= 6.9 && lon <= 7.2) {
+    return 'Port Harcourt (South South Branch)';
+  } else if (lat >= 7.3 && lat <= 7.5 && lon >= 3.8 && lon <= 4.0) {
+    return 'Ibadan (South West Branch)';
+  } else if (lat >= 6.2 && lat <= 6.4 && lon >= 7.0 && lon <= 7.2) {
+    return 'Enugu (South East Branch)';
+  } else if (lat >= 11.9 && lat <= 12.1 && lon >= 8.4 && lon <= 8.6) {
+    return 'Kano (North West Branch)';
+  } else if (lat >= 9.8 && lat <= 12.0 && lon >= 11.0 && lon <= 13.5) {
+    return 'Maiduguri (North East Branch)';
+  }
+  return `GPS: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E`;
 }
 
 export function LocationPicker({ onLocationCaptured }: LocationPickerProps) {
@@ -20,6 +40,7 @@ export function LocationPicker({ onLocationCaptured }: LocationPickerProps) {
     longitude: number;
     accuracyM: number;
     capturedAt: string;
+    locationName?: string;
   } | null>(null);
 
   const fetchLocation = () => {
@@ -34,11 +55,15 @@ export function LocationPicker({ onLocationCaptured }: LocationPickerProps) {
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+        const locationName = resolveApproximateLocation(lat, lon);
         const data = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
+          latitude: lat,
+          longitude: lon,
           accuracyM: Math.round(position.coords.accuracy),
           capturedAt: new Date(position.timestamp).toISOString(),
+          locationName,
         };
         setLocation(data);
         setLoading(false);
@@ -103,6 +128,13 @@ export function LocationPicker({ onLocationCaptured }: LocationPickerProps) {
               </span>
             </div>
           </div>
+
+          {location.locationName && (
+            <div className="p-2.5 bg-blue-50/60 border border-blue-200 rounded-lg text-xs flex items-center justify-between">
+              <span className="text-slate-600 font-medium">Nearest Operating Area:</span>
+              <span className="font-semibold text-navy-900">{location.locationName}</span>
+            </div>
+          )}
 
           {/* Interactive OpenStreetMap preview iframe */}
           <div className="relative h-36 rounded-lg overflow-hidden border border-slate-200 bg-slate-100">

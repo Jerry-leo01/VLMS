@@ -209,7 +209,7 @@ export default function AnomalyManagementPage() {
                   rows={3}
                   value={resolutionNote}
                   onChange={(e) => setResolutionNote(e.target.value)}
-                  placeholder="e.g. Verified with driver; vehicle odometer cluster was calibrated during scheduled maintenance."
+                  placeholder="e.g. Verified with staff member; vehicle odometer cluster was calibrated during scheduled maintenance."
                   className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
                 />
               </div>

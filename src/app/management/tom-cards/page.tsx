@@ -66,7 +66,7 @@ export default function TomCardsManagementPage() {
                   <th className="py-3 px-4">Card Reference</th>
                   <th className="py-3 px-4">Masked Card Number</th>
                   <th className="py-3 px-4">Assigned Vehicle</th>
-                  <th className="py-3 px-4">Assigned Driver</th>
+                  <th className="py-3 px-4">Assigned Staff</th>
                   <th className="py-3 px-4">Vendor Restriction</th>
                   <th className="py-3 px-4">Status</th>
                 </tr>

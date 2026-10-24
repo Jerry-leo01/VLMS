@@ -59,7 +59,7 @@ export default function LandingPage() {
               href="/register"
               className="inline-flex items-center justify-center gap-2 px-6 py-3.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 rounded-xl font-bold shadow-sm transition-colors"
             >
-              <span>Driver Registration Request</span>
+              <span>Staff Registration Request</span>
             </Link>
           </div>
         </div>

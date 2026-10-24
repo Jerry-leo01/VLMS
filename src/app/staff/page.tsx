@@ -58,12 +58,12 @@ export default function StaffDashboardPage() {
         vehiclePlate={assignment?.vehicle?.plate_number ?? 'KJA-842XA'}
       />
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 w-full py-6 space-y-6 flex-1">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 w-full py-6 space-y-6 flex-1 pb-24 md:pb-8">
         {/* Welcome Banner */}
         <div className="bg-navy-900 text-white rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <span className="text-xs font-semibold text-blue-200 uppercase tracking-wider">
-              Staff Driver Portal
+              Staff Vehicle Portal
             </span>
             <h1 className="text-2xl font-bold tracking-tight">
               Welcome, {profile?.full_name ?? 'Chukwuma Eze'}

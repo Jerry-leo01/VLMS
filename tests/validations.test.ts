@@ -184,5 +184,12 @@ describe('Utility & Validation Tests', () => {
       ocrConfidence: 42,
     });
     expect(descLowConf).toContain('Camera photograph resulted in low OCR optical confidence (42%). Image clarity requires verification.');
+
+    const descMismatch = formatAnomalyText('OCR_MANUAL_MISMATCH', {
+      currentKm: 50100,
+      ocrProposedKm: 50050,
+      difference: 50,
+    });
+    expect(descMismatch).toContain('Staff-confirmed reading (50,100 km) differs by 50 km from the camera OCR proposal (50,050 km).');
   });
 });

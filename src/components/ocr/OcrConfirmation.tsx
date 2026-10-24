@@ -2,31 +2,44 @@
 
 import React, { useState, useEffect } from 'react';
 import { processOdometerImage, OcrResult } from '@/lib/ocr/processor';
-import { Eye, CheckCircle2, AlertTriangle, Sparkles, Loader2 } from 'lucide-react';
+import { toCanonicalKm, formatOdometer, MILES_TO_KM } from '@/lib/utils';
+import { OdometerUnit } from '@/types/database';
+import { Eye, CheckCircle2, AlertTriangle, Sparkles, Loader2, Gauge, RefreshCw } from 'lucide-react';
 
 interface OcrConfirmationProps {
   imageSrc: string;
+  roiImageSrc?: string;
   onConfirmed: (data: {
     confirmedKm: number;
+    sourceUnit: OdometerUnit;
+    sourceReading: number;
+    rawOdometerText: string;
     ocrReadingKm: number | null;
     ocrConfidence: number;
   }) => void;
 }
 
-export function OcrConfirmation({ imageSrc, onConfirmed }: OcrConfirmationProps) {
+export function OcrConfirmation({ imageSrc, roiImageSrc, onConfirmed }: OcrConfirmationProps) {
   const [ocrLoading, setOcrLoading] = useState(true);
   const [ocrData, setOcrData] = useState<OcrResult | null>(null);
-  const [userKm, setUserKm] = useState<string>('');
+
+  // Unit and reading state
+  const [sourceUnit, setSourceUnit] = useState<OdometerUnit>('km');
+  const [userReadingInput, setUserReadingInput] = useState<string>('');
 
   useEffect(() => {
     let isMounted = true;
     const runOcr = async () => {
       setOcrLoading(true);
-      const res = await processOdometerImage(imageSrc);
+      // Run OCR on the isolated ROI if available, otherwise on full image
+      const targetSource = roiImageSrc || imageSrc;
+      const res = await processOdometerImage(targetSource);
+
       if (isMounted) {
         setOcrData(res);
-        if (res.proposedKm) {
-          setUserKm(res.proposedKm.toString());
+        setSourceUnit(res.detectedUnit || 'km');
+        if (res.proposedReading !== null && res.proposedReading !== undefined) {
+          setUserReadingInput(res.proposedReading.toString());
         }
         setOcrLoading(false);
       }
@@ -35,20 +48,34 @@ export function OcrConfirmation({ imageSrc, onConfirmed }: OcrConfirmationProps)
     return () => {
       isMounted = false;
     };
-  }, [imageSrc]);
+  }, [imageSrc, roiImageSrc]);
 
-  const numericUserKm = parseFloat(userKm);
+  const numericReading = parseFloat(userReadingInput);
+  const isValidNumber = !isNaN(numericReading) && numericReading >= 0;
+
+  // High-precision canonical calculation (1 mile = 1.609344 km) without cumulative drift
+  const canonicalKm = isValidNumber ? toCanonicalKm(numericReading, sourceUnit) : 0;
+
+  // Calculate mismatch against canonical proposed KM
   const isMismatch =
-    ocrData?.proposedKm !== null &&
-    ocrData?.proposedKm !== undefined &&
-    !isNaN(numericUserKm) &&
-    Math.abs(numericUserKm - ocrData.proposedKm) > 10;
+    ocrData?.proposedReading !== null &&
+    ocrData?.proposedReading !== undefined &&
+    isValidNumber &&
+    Math.abs(numericReading - ocrData.proposedReading) > 10;
+
+  const handleUnitToggle = (newUnit: OdometerUnit) => {
+    if (newUnit === sourceUnit) return;
+    setSourceUnit(newUnit);
+  };
 
   const handleConfirm = () => {
-    if (isNaN(numericUserKm) || numericUserKm < 0) return;
+    if (!isValidNumber) return;
     onConfirmed({
-      confirmedKm: numericUserKm,
-      ocrReadingKm: ocrData?.proposedKm ?? null,
+      confirmedKm: canonicalKm,
+      sourceUnit,
+      sourceReading: numericReading,
+      rawOdometerText: ocrData?.rawText ?? '',
+      ocrReadingKm: ocrData?.canonicalKm ?? ocrData?.proposedKm ?? null,
       ocrConfidence: ocrData?.confidence ?? 0,
     });
   };
@@ -58,11 +85,11 @@ export function OcrConfirmation({ imageSrc, onConfirmed }: OcrConfirmationProps)
       <div className="flex items-center justify-between border-b border-slate-100 pb-2">
         <div className="flex items-center gap-2">
           <Sparkles className="w-5 h-5 text-blue-600" />
-          <h4 className="text-sm font-semibold text-slate-900">Odometer OCR Extraction</h4>
+          <h4 className="text-sm font-semibold text-slate-900">Odometer Verification & Unit Review</h4>
         </div>
         {ocrLoading && (
           <span className="text-xs text-slate-500 flex items-center gap-1.5">
-            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" /> Analyzing image...
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" /> Analyzing digits & units...
           </span>
         )}
       </div>
@@ -70,54 +97,132 @@ export function OcrConfirmation({ imageSrc, onConfirmed }: OcrConfirmationProps)
       {ocrLoading ? (
         <div className="py-6 text-center space-y-2">
           <Loader2 className="w-8 h-8 animate-spin text-navy-800 mx-auto" />
-          <p className="text-sm font-medium text-slate-700">Scanning odometer display...</p>
-          <p className="text-xs text-slate-400">Extracting numbers and checking optical confidence</p>
+          <p className="text-sm font-medium text-slate-700">Scanning odometer instrument cluster...</p>
+          <p className="text-xs text-slate-400">Isolating digital numbers, filtering trip meters, and detecting unit (KM / Miles)</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {/* OCR Proposal Card */}
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
-            <div>
-              <span className="text-xs text-blue-700 font-medium block">OCR Proposed Reading</span>
-              <span className="text-lg font-bold text-navy-950 font-mono">
-                {ocrData?.proposedKm ? `${ocrData.proposedKm.toLocaleString()} KM` : 'Uncertain (Verify below)'}
+          {/* Side-by-side Photo Inspection Card */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center bg-slate-50 border border-slate-200 rounded-xl p-3">
+            <div className="space-y-1">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Captured Cluster Photo
               </span>
+              <div className="relative rounded-lg overflow-hidden border border-slate-300 bg-black aspect-video flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={roiImageSrc || imageSrc}
+                  alt="Captured odometer cluster"
+                  className="max-h-full max-w-full object-contain"
+                />
+                <div className="absolute top-2 left-2 bg-black/70 text-white text-[10px] font-mono px-2 py-0.5 rounded">
+                  {roiImageSrc ? 'ROI View' : 'Full Frame'}
+                </div>
+              </div>
             </div>
-            <div className="text-right">
-              <span className="text-xs text-blue-700 font-medium block">Confidence</span>
-              <span className="text-sm font-semibold text-blue-900">{ocrData?.confidence ?? 0}%</span>
+
+            <div className="space-y-3">
+              <div className="p-3 bg-white border border-slate-200 rounded-lg space-y-1.5 shadow-xs">
+                <span className="text-xs text-slate-500 font-medium block">Computer Vision Detection</span>
+                <div className="flex items-baseline justify-between">
+                  <span className="text-xl font-mono font-bold text-navy-950">
+                    {ocrData?.proposedReading !== null && ocrData?.proposedReading !== undefined
+                      ? `${ocrData.proposedReading.toLocaleString()} ${ocrData.detectedUnit.toUpperCase()}`
+                      : 'Uncertain reading'}
+                  </span>
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-800 uppercase">
+                    {ocrData?.confidence ?? 0}% Confidence
+                  </span>
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Detected Unit:{' '}
+                  <strong className="text-navy-900 uppercase">
+                    {ocrData?.detectedUnit === 'mi' ? 'Miles (Imperial)' : 'Kilometers (Metric)'}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Unit Toggle */}
+              <div className="space-y-1">
+                <span className="text-xs font-semibold text-slate-700 block">Dashboard Measurement Unit</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleUnitToggle('km')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all border ${
+                      sourceUnit === 'km'
+                        ? 'bg-navy-900 text-white border-navy-900 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    Kilometers (KM)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleUnitToggle('mi')}
+                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all border ${
+                      sourceUnit === 'mi'
+                        ? 'bg-navy-900 text-white border-navy-900 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    Miles (MI)
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* User Confirmation Input */}
+          {/* User Confirmation & Override Input */}
           <div className="space-y-1.5">
-            <label htmlFor="confirmedKm" className="block text-xs font-semibold text-slate-700">
-              Confirmed Kilometre Reading (KM) <span className="text-red-500">*</span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="confirmedReading" className="block text-xs font-semibold text-slate-700">
+                Staff Confirmed Reading (as shown on vehicle dashboard) <span className="text-red-500">*</span>
+              </label>
+              <span className="text-[11px] font-mono text-slate-500 font-semibold uppercase">
+                Unit: {sourceUnit}
+              </span>
+            </div>
             <div className="relative">
               <input
-                id="confirmedKm"
+                id="confirmedReading"
                 type="number"
                 step="0.1"
                 min="0"
-                value={userKm}
-                onChange={(e) => setUserKm(e.target.value)}
-                placeholder="e.g. 45200"
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-base font-mono font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800 focus:border-transparent"
+                value={userReadingInput}
+                onChange={(e) => setUserReadingInput(e.target.value)}
+                placeholder={sourceUnit === 'mi' ? 'e.g. 57612' : 'e.g. 92717'}
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-lg font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800 focus:border-transparent"
               />
-              <span className="absolute right-3 top-3 text-xs font-bold text-slate-400">KM</span>
+              <span className="absolute right-3 top-3 text-xs font-bold text-slate-400 uppercase">
+                {sourceUnit}
+              </span>
             </div>
-            <p className="text-[11px] text-slate-500">
-              Please verify that this exact reading matches the odometer display in your photo.
-            </p>
           </div>
 
-          {/* Mismatch Warning */}
+          {/* Live Canonical Conversion Display */}
+          {isValidNumber && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs">
+              <div>
+                <span className="text-emerald-800 font-semibold block">Canonical System Value</span>
+                <span className="text-slate-600">
+                  {sourceUnit === 'mi'
+                    ? `${numericReading.toLocaleString()} Miles × ${MILES_TO_KM} = ${canonicalKm.toLocaleString()} KM`
+                    : `${canonicalKm.toLocaleString()} KM`}
+                </span>
+              </div>
+              <span className="text-base font-bold font-mono text-emerald-900">
+                {formatOdometer(canonicalKm, 'km')}
+              </span>
+            </div>
+          )}
+
+          {/* Optical Mismatch Warning */}
           {isMismatch && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
               <span>
-                Your confirmed reading differs from the OCR result. This entry will be flagged for routine supervisory review, but submission will proceed.
+                Your confirmed reading ({numericReading.toLocaleString()} {sourceUnit.toUpperCase()}) differs from the OCR result. This entry will be flagged for routine supervisory review, but submission will proceed.
               </span>
             </div>
           )}
@@ -125,10 +230,10 @@ export function OcrConfirmation({ imageSrc, onConfirmed }: OcrConfirmationProps)
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={isNaN(numericUserKm) || numericUserKm <= 0}
+            disabled={!isValidNumber || numericReading <= 0}
             className="w-full py-2.5 px-4 bg-navy-900 hover:bg-navy-800 disabled:opacity-50 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition-colors"
           >
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Confirm Reading
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Confirm & Attach Reading
           </button>
         </div>
       )}

@@ -15,7 +15,7 @@ export default function ReportsExportPage() {
     setDownloading('logs');
     try {
       const logs = await VLMSService.getAllDailyLogs();
-      const headers = ['Log ID', 'Business Date', 'Vehicle Plate', 'Driver Name', 'Confirmed KM', 'OCR KM', 'OCR Confidence', 'Status', 'Submitted At'];
+      const headers = ['Log ID', 'Business Date', 'Vehicle Plate', 'Staff Name', 'Confirmed KM', 'OCR KM', 'OCR Confidence', 'Status', 'Submitted At'];
       const rows = logs.map((l) => [
         l.id,
         l.business_date,
@@ -39,7 +39,7 @@ export default function ReportsExportPage() {
     setDownloading('fuel');
     try {
       const fuel = await VLMSService.getAllFuelTransactions();
-      const headers = ['Transaction ID', 'Vehicle Plate', 'Driver Name', 'Payment Method', 'Vendor Name', 'Odometer KM', 'Amount NGN', 'Quantity Litres', 'Purchased At', 'Status'];
+      const headers = ['Transaction ID', 'Vehicle Plate', 'Staff Name', 'Payment Method', 'Vendor Name', 'Odometer KM', 'Amount NGN', 'Quantity Litres', 'Purchased At', 'Status'];
       const rows = fuel.map((f) => [
         f.id,
         f.vehicle?.plate_number ?? '',

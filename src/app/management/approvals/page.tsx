@@ -80,9 +80,9 @@ export default function ApprovalsQueuePage() {
               <ArrowLeft className="w-4 h-4" />
             </Link>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Driver Registration Approvals Queue</h1>
+              <h1 className="text-xl font-bold text-slate-900">Staff Registration Approvals Queue</h1>
               <p className="text-xs text-slate-500">
-                Authorize driver access, verify assigned plate numbers and TOM cards
+                Authorize staff access, verify assigned plate numbers and TOM cards
               </p>
             </div>
           </div>
@@ -108,7 +108,7 @@ export default function ApprovalsQueuePage() {
                     <div className="flex items-start justify-between border-b border-slate-100 pb-3">
                       <div>
                         <h3 className="text-base font-bold text-slate-900">
-                          {req.user?.full_name ?? 'Driver Applicant'}
+                          {req.user?.full_name ?? 'Staff Applicant'}
                         </h3>
                         <span className="text-xs text-slate-500">
                           Employee ID: {req.user?.employee_id ?? 'None'} • {req.requested_office?.name ?? 'Office'}
@@ -168,7 +168,7 @@ export default function ApprovalsQueuePage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4">Driver Name</th>
+                    <th className="py-3 px-4">Staff Name</th>
                     <th className="py-3 px-4">Requested Vehicle</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4">Reviewed Date</th>
@@ -214,7 +214,7 @@ export default function ApprovalsQueuePage() {
                 rows={3}
                 value={rejectionReason}
                 onChange={(e) => setRejectionReason(e.target.value)}
-                placeholder="e.g. Vehicle plate is already assigned to another active driver in Lagos HQ."
+                placeholder="e.g. Vehicle plate is already assigned to another active staff member in Lagos HQ."
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
               />
               <div className="flex gap-2">

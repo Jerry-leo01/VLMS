@@ -28,7 +28,7 @@ export default function StaffProfilePage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col pb-20 md:pb-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col pb-24 md:pb-8">
       <Navbar
         userRole="staff"
         userName={profile?.full_name ?? 'Chukwuma Eze'}
@@ -36,7 +36,7 @@ export default function StaffProfilePage() {
       />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 w-full py-6 space-y-6 flex-1">
-        <h1 className="text-xl font-bold text-slate-900">Driver Profile & Account</h1>
+        <h1 className="text-xl font-bold text-slate-900">Staff Profile & Account</h1>
 
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
           <div className="flex items-center gap-4 border-b border-slate-100 pb-5">

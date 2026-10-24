@@ -297,6 +297,10 @@ export const VLMSService = {
     vehicleId: string;
     userId: string;
     odometerKm: number;
+    rawOdometerText?: string | null;
+    sourceUnit?: 'km' | 'mi';
+    sourceReading?: number | null;
+    locationName?: string | null;
     ocrReadingKm?: number | null;
     ocrConfidence?: number | null;
     evidenceId: string;
@@ -334,6 +338,11 @@ export const VLMSService = {
       user_id: input.userId,
       business_date: today,
       odometer_km: input.odometerKm,
+      raw_odometer_text: input.rawOdometerText ?? null,
+      source_unit: input.sourceUnit ?? 'km',
+      source_reading: input.sourceReading ?? input.odometerKm,
+      canonical_reading_km: input.odometerKm,
+      location_name: input.locationName ?? null,
       ocr_reading_km: input.ocrReadingKm ?? null,
       ocr_confidence: input.ocrConfidence ?? null,
       evidence_id: input.evidenceId,

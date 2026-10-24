@@ -104,7 +104,7 @@ export default function RegisterPage() {
           Company Car Registration
         </h2>
         <p className="mt-1 text-center text-xs sm:text-sm text-slate-500">
-          Register company assigned car, driver credentials, and TOM card details
+          Register company assigned car, staff credentials, and TOM card details
         </p>
       </div>
 
@@ -156,7 +156,7 @@ export default function RegisterPage() {
                         : 'border-slate-200 bg-white hover:bg-slate-50'
                     }`}
                   >
-                    <span className="block text-xs sm:text-sm font-bold text-slate-900">Staff Driver</span>
+                    <span className="block text-xs sm:text-sm font-bold text-slate-900">Staff Member</span>
                     <span className="text-[11px] text-slate-500 block mt-0.5">Assigned Company Car</span>
                   </button>
 

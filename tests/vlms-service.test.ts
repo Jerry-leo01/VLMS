@@ -85,7 +85,7 @@ describe('VLMS Service & Business Logic', () => {
     // EKY-319TN was already registered and approved above
     await expect(
       VLMSService.submitRegistration({
-        fullName: 'Duplicate Driver',
+        fullName: 'Duplicate Staff',
         phoneNumber: '+2348099999999',
         plateNumber: 'EKY-319TN',
         officeId: '11111111-1111-1111-1111-111111111111',

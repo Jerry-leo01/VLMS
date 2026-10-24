@@ -86,7 +86,7 @@ export default function VehiclesManagementPage() {
                   <th className="py-3 px-4">Make & Model</th>
                   <th className="py-3 px-4">Year</th>
                   <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4">Assigned Office / Driver</th>
+                  <th className="py-3 px-4">Assigned Office / Staff</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

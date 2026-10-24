@@ -42,7 +42,7 @@ export default function UsersManagementPage() {
               <ArrowLeft className="w-4 h-4" />
             </Link>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">Fleet Staff & Drivers Directory</h1>
+              <h1 className="text-xl font-bold text-slate-900">Fleet Staff Directory</h1>
               <p className="text-xs text-slate-500">
                 User accounts, role assignments, and organizational office locations
               </p>

@@ -82,7 +82,7 @@ export default function ManagementFuelPage() {
                 <tr>
                   <th className="py-3 px-4">Purchased Date</th>
                   <th className="py-3 px-4">Vehicle Plate</th>
-                  <th className="py-3 px-4">Driver</th>
+                  <th className="py-3 px-4">Staff Member</th>
                   <th className="py-3 px-4">Payment Method</th>
                   <th className="py-3 px-4">Vendor / Station</th>
                   <th className="py-3 px-4">Total Amount (NGN)</th>

@@ -30,11 +30,42 @@ export function formatCurrency(amount: number, currency: string = 'NGN'): string
 }
 
 /**
- * Formats odometer numbers with km unit
+ * High precision conversion factor: 1 international mile = 1.609344 km
  */
-export function formatOdometer(km: number | null | undefined): string {
-  if (km === null || km === undefined) return '0 km';
-  return `${Number(km).toLocaleString('en-US', { maximumFractionDigits: 1 })} km`;
+export const MILES_TO_KM = 1.609344;
+
+/**
+ * Converts odometer reading between units with high precision (1 mi = 1.609344 km).
+ * Rounds result to 2 decimal places to avoid floating point drift.
+ */
+export function convertOdometerReading(reading: number, fromUnit: 'km' | 'mi', toUnit: 'km' | 'mi'): number {
+  if (isNaN(reading) || reading < 0) return 0;
+  if (fromUnit === toUnit) return reading;
+  if (fromUnit === 'mi' && toUnit === 'km') {
+    return Math.round(reading * MILES_TO_KM * 100) / 100;
+  }
+  if (fromUnit === 'km' && toUnit === 'mi') {
+    return Math.round((reading / MILES_TO_KM) * 100) / 100;
+  }
+  return reading;
+}
+
+/**
+ * Calculates canonical odometer reading in Kilometres (KM) from source reading and source unit.
+ */
+export function toCanonicalKm(sourceReading: number, sourceUnit: 'km' | 'mi'): number {
+  if (isNaN(sourceReading) || sourceReading < 0) return 0;
+  return sourceUnit === 'mi'
+    ? Math.round(sourceReading * MILES_TO_KM * 100) / 100
+    : sourceReading;
+}
+
+/**
+ * Formats odometer numbers with km or mi unit
+ */
+export function formatOdometer(reading: number | null | undefined, unit: 'km' | 'mi' = 'km'): string {
+  if (reading === null || reading === undefined) return `0 ${unit}`;
+  return `${Number(reading).toLocaleString('en-US', { maximumFractionDigits: 1 })} ${unit}`;
 }
 
 /**
@@ -133,7 +164,7 @@ export function formatAnomalyText(ruleCode: string, details?: Record<string, unk
     case 'OCR_LOW_CONFIDENCE':
       return `Camera photograph resulted in low OCR optical confidence (${Number(d.ocrConfidence || 0)}%). Image clarity requires verification.`;
     case 'OCR_MANUAL_MISMATCH':
-      return `Driver-confirmed reading (${formatOdometer(
+      return `Staff-confirmed reading (${formatOdometer(
         Number(d.currentKm)
       )}) differs by ${Number(d.difference || 0)} km from the camera OCR proposal (${formatOdometer(
         Number(d.ocrProposedKm)

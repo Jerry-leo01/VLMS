@@ -8,7 +8,7 @@ import { CameraCapture } from '@/components/camera/CameraCapture';
 import { OcrConfirmation } from '@/components/ocr/OcrConfirmation';
 import { LocationPicker } from '@/components/gps/LocationPicker';
 import { VLMSService } from '@/lib/services/vlms-service';
-import { VehicleAssignment, Profile, DailyLog } from '@/types/database';
+import { VehicleAssignment, Profile, DailyLog, OdometerUnit } from '@/types/database';
 import { getBusinessDate } from '@/lib/utils';
 import { Car, CheckCircle2, AlertCircle, ArrowLeft, Loader2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
@@ -22,8 +22,12 @@ export default function DailyLogSubmissionPage() {
 
   // Form State
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedRoi, setCapturedRoi] = useState<string | null>(null);
   const [imageHash, setImageHash] = useState<string | null>(null);
   const [confirmedKm, setConfirmedKm] = useState<number | null>(null);
+  const [sourceUnit, setSourceUnit] = useState<OdometerUnit>('km');
+  const [sourceReading, setSourceReading] = useState<number | null>(null);
+  const [rawOdometerText, setRawOdometerText] = useState<string>('');
   const [ocrReadingKm, setOcrReadingKm] = useState<number | null>(null);
   const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
   const [gpsData, setGpsData] = useState<{
@@ -58,17 +62,24 @@ export default function DailyLogSubmissionPage() {
     init();
   }, []);
 
-  const handleCaptureComplete = (dataUrl: string, hash: string) => {
+  const handleCaptureComplete = (dataUrl: string, hash: string, roiDataUrl?: string) => {
     setCapturedImage(dataUrl);
     setImageHash(hash);
+    if (roiDataUrl) setCapturedRoi(roiDataUrl);
   };
 
   const handleOcrConfirmed = (data: {
     confirmedKm: number;
+    sourceUnit: OdometerUnit;
+    sourceReading: number;
+    rawOdometerText: string;
     ocrReadingKm: number | null;
     ocrConfidence: number;
   }) => {
     setConfirmedKm(data.confirmedKm);
+    setSourceUnit(data.sourceUnit);
+    setSourceReading(data.sourceReading);
+    setRawOdometerText(data.rawOdometerText);
     setOcrReadingKm(data.ocrReadingKm);
     setOcrConfidence(data.ocrConfidence);
   };
@@ -95,7 +106,12 @@ export default function DailyLogSubmissionPage() {
         sha256Hash: imageHash,
         mimeType: 'image/jpeg',
         fileSizeBytes: 420000,
-        metadata: { reading: confirmedKm, ocrProposal: ocrReadingKm },
+        metadata: {
+          reading: confirmedKm,
+          sourceReading: sourceReading ?? confirmedKm,
+          sourceUnit,
+          ocrProposal: ocrReadingKm,
+        },
       });
 
       // 2. Submit daily log
@@ -103,6 +119,9 @@ export default function DailyLogSubmissionPage() {
         vehicleId: assignment.vehicle_id,
         userId: 'p-staff-01',
         odometerKm: confirmedKm,
+        rawOdometerText,
+        sourceUnit,
+        sourceReading: sourceReading ?? confirmedKm,
         ocrReadingKm,
         ocrConfidence,
         evidenceId: evidence.id,
@@ -220,7 +239,7 @@ export default function DailyLogSubmissionPage() {
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block font-medium">Driver</span>
+                  <span className="text-slate-400 block font-medium">Staff Member</span>
                   <span className="text-sm font-semibold text-slate-800">
                     {profile?.full_name ?? 'Chukwuma Eze'}
                   </span>
@@ -243,7 +262,11 @@ export default function DailyLogSubmissionPage() {
                     <span className="w-5 h-5 rounded-full bg-navy-900 text-white text-xs font-bold flex items-center justify-center">2</span>
                     <h3 className="text-sm font-bold text-slate-900">OCR & Reading Confirmation</h3>
                   </div>
-                  <OcrConfirmation imageSrc={capturedImage} onConfirmed={handleOcrConfirmed} />
+                  <OcrConfirmation
+                    imageSrc={capturedImage}
+                    roiImageSrc={capturedRoi || undefined}
+                    onConfirmed={handleOcrConfirmed}
+                  />
                 </div>
               )}
 

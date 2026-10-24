@@ -126,12 +126,19 @@ export interface EvidenceFile {
   verification_status: VerificationStatus;
 }
 
+export type OdometerUnit = 'km' | 'mi';
+
 export interface DailyLog {
   id: string;
   vehicle_id: string;
   user_id: string;
   business_date: string; // YYYY-MM-DD
   odometer_km: number;
+  raw_odometer_text?: string | null;
+  source_unit?: OdometerUnit;
+  source_reading?: number | null;
+  canonical_reading_km?: number | null;
+  location_name?: string | null;
   ocr_reading_km: number | null;
   ocr_confidence: number | null;
   evidence_id: string;
@@ -156,6 +163,9 @@ export interface FuelTransaction {
   tom_card_id: string | null;
   vendor_name: string;
   odometer_km: number;
+  source_unit?: OdometerUnit;
+  source_reading?: number | null;
+  canonical_reading_km?: number | null;
   odometer_evidence_id: string;
   receipt_evidence_id: string;
   amount: number;

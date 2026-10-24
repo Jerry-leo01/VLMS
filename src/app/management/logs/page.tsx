@@ -68,7 +68,7 @@ export default function ManagementLogsPage() {
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="Filter plate, driver, date..."
+                placeholder="Filter plate, staff, date..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs w-60 focus:outline-none focus:ring-1 focus:ring-navy-800"
@@ -82,7 +82,7 @@ export default function ManagementLogsPage() {
                 <tr>
                   <th className="py-3 px-4">Business Date</th>
                   <th className="py-3 px-4">Vehicle Plate</th>
-                  <th className="py-3 px-4">Driver</th>
+                  <th className="py-3 px-4">Staff Member</th>
                   <th className="py-3 px-4">Confirmed Odometer</th>
                   <th className="py-3 px-4">OCR Proposed</th>
                   <th className="py-3 px-4">GPS Accuracy</th>

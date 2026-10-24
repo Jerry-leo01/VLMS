@@ -232,7 +232,7 @@ export default function FuelPurchasePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col pb-20 md:pb-8">
+    <div className="min-h-screen bg-slate-50 flex flex-col pb-24 md:pb-8">
       <Navbar
         userRole="staff"
         userName={profile?.full_name ?? 'Chukwuma Eze'}
