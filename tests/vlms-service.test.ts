@@ -66,7 +66,7 @@ describe('VLMS Service & Business Logic', () => {
       plateNumber: 'EKY-319TN',
       carName: 'Toyota Corolla Executive',
       carModel: 'Corolla LE',
-      carYear: '2023',
+      carYear: 2023,
       tomCardNumber: '804689',
       officeId: '11111111-1111-1111-1111-111111111111',
     });
@@ -104,6 +104,7 @@ describe('VLMS Service & Business Logic', () => {
         vendorName: 'TOTAL ENERGIES FILLING STATION',
         odometerKm: 33000,
         odometerEvidenceId: 'ev-seed-01',
+        receiptEvidenceId: 'ev-seed-01',
         amount: 25000,
         quantityLitres: 30,
         purchasedAt: new Date().toISOString(),

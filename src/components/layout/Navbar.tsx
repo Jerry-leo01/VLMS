@@ -74,7 +74,7 @@ export function Navbar({ userRole = 'staff', userName = 'Staff Member', vehicleP
         </nav>
 
         {/* User Info & Switchers */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <ThemeToggle />
 
           <div className="hidden sm:flex flex-col text-right">
@@ -85,33 +85,36 @@ export function Navbar({ userRole = 'staff', userName = 'Staff Member', vehicleP
           </div>
 
           <div className="flex items-center gap-1">
+            {/* Desktop Sign Out */}
             <Link
               href="/login"
               title="Sign Out"
-              className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="hidden sm:flex p-2 text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             >
               <LogOut className="w-4 h-4" />
             </Link>
 
-            {isManagement && (
+            {/* Mobile Menu Trigger */}
+            {isManagement ? (
               <button
                 type="button"
                 onClick={toggleAdminSidebar}
                 className="lg:hidden p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                title="Open Management Modules"
+                title="Open Management Navigation Menu"
                 aria-label="Open sidebar modules"
               >
-                <LayoutGrid className="w-5 h-5" />
+                <Menu className="w-5 h-5" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="md:hidden p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                aria-label="Toggle menu"
+              >
+                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
             )}
-
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-              aria-label="Toggle menu"
-            >
-              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
           </div>
         </div>
       </div>

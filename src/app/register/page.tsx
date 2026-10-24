@@ -6,6 +6,7 @@ import { Car, ShieldCheck, CheckCircle2, AlertCircle, ArrowLeft, KeyRound } from
 import { normalizePlateNumber } from '@/lib/utils';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { UserRole } from '@/types/database';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 export default function RegisterPage() {
   // Form State
@@ -93,33 +94,46 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-200 relative">
+      {/* Top Bar with Brand Link & Theme Switcher */}
+      <div className="absolute top-4 right-4 flex items-center gap-3">
+        <ThemeToggle />
+      </div>
+      <div className="absolute top-4 left-4">
+        <Link
+          href="/"
+          className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-navy-900 dark:hover:text-white transition-colors flex items-center gap-1"
+        >
+          ← Back to VLMS
+        </Link>
+      </div>
+
       <div className="sm:mx-auto sm:w-full sm:max-w-xl">
         <div className="flex justify-center">
-          <div className="bg-navy-900 text-white p-3 rounded-2xl shadow-md">
+          <div className="bg-navy-900 dark:bg-blue-600 text-white p-3 rounded-2xl shadow-md">
             <Car className="w-8 h-8" />
           </div>
         </div>
-        <h2 className="mt-3 text-center text-2xl font-bold tracking-tight text-slate-900">
+        <h2 className="mt-3 text-center text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
           Company Car Registration
         </h2>
-        <p className="mt-1 text-center text-xs sm:text-sm text-slate-500">
+        <p className="mt-1 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400">
           Register company assigned car, staff credentials, and TOM card details
         </p>
       </div>
 
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-xl">
-        <div className="bg-white py-6 sm:py-8 px-4 sm:px-8 shadow-sm border border-slate-200 rounded-2xl space-y-6">
+        <div className="bg-white dark:bg-slate-900 py-6 sm:py-8 px-4 sm:px-8 shadow-sm border border-slate-200 dark:border-slate-800 rounded-2xl space-y-6 transition-colors">
           {submitted ? (
             <div className="text-center space-y-4 py-4">
-              <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+              <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900">Registration Submitted Successfully</h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
-                Your registration for company car <strong className="text-navy-900 font-mono font-bold">{normalizePlateNumber(plateNumber)}</strong> ({carName}) has been received for verification.
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Registration Submitted Successfully</h3>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
+                Your registration for company car <strong className="text-navy-900 dark:text-blue-400 font-mono font-bold">{normalizePlateNumber(plateNumber)}</strong> ({carName}) has been received for verification.
               </p>
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 text-left space-y-1">
+              <div className="p-4 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 rounded-xl text-xs text-amber-900 dark:text-amber-200 text-left space-y-1">
                 <strong>Status: Pending Verification</strong>
                 <p>
                   Fleet administration will review your car details, phone number, and branch assignment. Once authorized, you can log in to submit daily logs and fuel records.
@@ -127,7 +141,7 @@ export default function RegisterPage() {
               </div>
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-navy-900 text-white rounded-xl text-xs sm:text-sm font-semibold hover:bg-navy-800 transition-colors"
+                className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 bg-navy-900 hover:bg-navy-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors"
               >
                 Return to Login
               </Link>
@@ -135,15 +149,15 @@ export default function RegisterPage() {
           ) : (
             <>
               {error && (
-                <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs sm:text-sm text-red-800 flex items-start gap-2.5">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                <div className="p-3.5 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 rounded-xl text-xs sm:text-sm text-red-800 dark:text-red-300 flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
                   <span>{error}</span>
                 </div>
               )}
 
               {/* Account Role Selector */}
               <div className="space-y-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
                   Select Registration Type
                 </label>
                 <div className="grid grid-cols-2 gap-3">
@@ -152,12 +166,12 @@ export default function RegisterPage() {
                     onClick={() => handleAccountTypeChange('staff')}
                     className={`py-3 px-4 rounded-xl border text-left transition-all ${
                       accountType === 'staff'
-                        ? 'border-navy-900 bg-navy-50/60 ring-2 ring-navy-900'
-                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                        ? 'border-navy-900 dark:border-blue-500 bg-navy-50/60 dark:bg-blue-950/50 ring-2 ring-navy-900 dark:ring-blue-500'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
-                    <span className="block text-xs sm:text-sm font-bold text-slate-900">Staff Member</span>
-                    <span className="text-[11px] text-slate-500 block mt-0.5">Assigned Company Car</span>
+                    <span className="block text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Staff Member</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">Assigned Company Car</span>
                   </button>
 
                   <button
@@ -165,12 +179,12 @@ export default function RegisterPage() {
                     onClick={() => handleAccountTypeChange('management')}
                     className={`py-3 px-4 rounded-xl border text-left transition-all ${
                       accountType === 'management'
-                        ? 'border-navy-900 bg-navy-50/60 ring-2 ring-navy-900'
-                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                        ? 'border-navy-900 dark:border-blue-500 bg-navy-50/60 dark:bg-blue-950/50 ring-2 ring-navy-900 dark:ring-blue-500'
+                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750'
                     }`}
                   >
-                    <span className="block text-xs sm:text-sm font-bold text-slate-900">Administrator / Mgr</span>
-                    <span className="text-[11px] text-slate-500 block mt-0.5">Privileged Passcode</span>
+                    <span className="block text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Administrator / Mgr</span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">Privileged Passcode</span>
                   </button>
                 </div>
               </div>
@@ -178,18 +192,18 @@ export default function RegisterPage() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Privileged Role Sub-Selection */}
                 {accountType === 'management' && (
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                    <div className="flex items-center gap-2 text-xs font-bold text-navy-950">
-                      <KeyRound className="w-4 h-4 text-blue-600" />
+                  <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-3">
+                    <div className="flex items-center gap-2 text-xs font-bold text-navy-950 dark:text-blue-300">
+                      <KeyRound className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                       Administrative Authorization
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700">Privileged Role</label>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Privileged Role</label>
                         <select
                           value={requestedRole}
                           onChange={(e) => setRequestedRole(e.target.value as UserRole)}
-                          className="mt-1 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-navy-800"
+                          className="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
                         >
                           <option value="administrator">Administrator</option>
                           <option value="fleet_manager">Fleet Manager</option>
@@ -198,7 +212,7 @@ export default function RegisterPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                           Security Passcode <span className="text-red-500">*</span>
                         </label>
                         <input
@@ -207,7 +221,7 @@ export default function RegisterPage() {
                           value={adminPasscode}
                           onChange={(e) => setAdminPasscode(e.target.value)}
                           placeholder="e.g. VLMS-ADMIN-2026"
-                          className="mt-1 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-navy-800"
+                          className="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
                         />
                       </div>
                     </div>
@@ -217,7 +231,7 @@ export default function RegisterPage() {
                 {/* Personal Information */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Full Name <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -226,11 +240,11 @@ export default function RegisterPage() {
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="e.g. Chukwuma Eze"
-                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       User Phone Number <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -239,7 +253,7 @@ export default function RegisterPage() {
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
                       placeholder="e.g. 08031234567"
-                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
                     />
                   </div>
                 </div>
@@ -247,7 +261,7 @@ export default function RegisterPage() {
                 {/* Vehicle Plate & TOM Card */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       Vehicle Plate Number <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -256,11 +270,11 @@ export default function RegisterPage() {
                       value={plateNumber}
                       onChange={(e) => setPlateNumber(e.target.value)}
                       placeholder="e.g. KJA-842XA"
-                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm font-mono uppercase focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm font-mono uppercase text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                       TOM Card Number <span className="text-slate-400 font-normal">(6 digits)</span>
                     </label>
                     <input
@@ -269,19 +283,19 @@ export default function RegisterPage() {
                       value={tomCardNumber}
                       onChange={(e) => setTomCardNumber(e.target.value)}
                       placeholder="e.g. 804689"
-                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm font-mono text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
                     />
                   </div>
                 </div>
 
                 {/* Company Car Information */}
-                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
-                  <span className="block text-xs font-bold uppercase tracking-wider text-slate-700">
+                <div className="p-3.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-3">
+                  <span className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                     Company Car Specifications
                   </span>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                         Car Name <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -290,11 +304,11 @@ export default function RegisterPage() {
                         value={carName}
                         onChange={(e) => setCarName(e.target.value)}
                         placeholder="e.g. Toyota Corolla"
-                        className="mt-1 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-navy-800"
+                        className="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                         Car Model <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -303,11 +317,11 @@ export default function RegisterPage() {
                         value={carModel}
                         onChange={(e) => setCarModel(e.target.value)}
                         placeholder="e.g. LE / 1.8L"
-                        className="mt-1 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-navy-800"
+                        className="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                         Car Year <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -318,7 +332,7 @@ export default function RegisterPage() {
                         value={carYear}
                         onChange={(e) => setCarYear(e.target.value)}
                         placeholder="e.g. 2022"
-                        className="mt-1 w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-navy-800"
+                        className="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
                       />
                     </div>
                   </div>
@@ -326,13 +340,13 @@ export default function RegisterPage() {
 
                 {/* Office Locations Dropdown (Exact 8 Options) */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Office Branch Location <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={officeId}
                     onChange={(e) => setOfficeId(e.target.value)}
-                    className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm font-medium focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                    className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm font-medium text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
                   >
                     {exactOffices.map((off) => (
                       <option key={off.id} value={off.id}>
@@ -344,7 +358,7 @@ export default function RegisterPage() {
 
                 {/* Password */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700">
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                     Password <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -354,7 +368,7 @@ export default function RegisterPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Min 6 characters"
-                    className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-xs sm:text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                    className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
                   />
                 </div>
 
@@ -365,11 +379,11 @@ export default function RegisterPage() {
                     type="checkbox"
                     checked={privacyAccepted}
                     onChange={(e) => setPrivacyAccepted(e.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-slate-300 text-navy-900 focus:ring-navy-800"
+                    className="mt-1 h-4 w-4 rounded border-slate-300 dark:border-slate-700 text-navy-900 focus:ring-navy-800 dark:bg-slate-800"
                   />
-                  <label htmlFor="privacy" className="text-xs text-slate-600 leading-normal">
+                  <label htmlFor="privacy" className="text-xs text-slate-600 dark:text-slate-400 leading-normal">
                     I acknowledge that odometer photographs and location coordinates are captured solely for official company car audit purposes in accordance with the{' '}
-                    <Link href="/privacy" className="text-navy-900 font-semibold underline">
+                    <Link href="/privacy" className="text-navy-900 dark:text-blue-400 font-semibold underline">
                       VLMS Privacy Policy
                     </Link>
                     .
@@ -379,15 +393,15 @@ export default function RegisterPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-3.5 px-4 bg-navy-900 hover:bg-navy-800 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-md transition-colors"
+                  className="w-full py-3.5 px-4 bg-navy-900 hover:bg-navy-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-md transition-colors"
                 >
                   {loading ? 'Submitting Registration...' : 'Submit Car Registration Request'}
                 </button>
               </form>
 
-              <div className="text-center text-xs text-slate-500 pt-2 border-t border-slate-100">
+              <div className="text-center text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
                 Already registered?{' '}
-                <Link href="/login" className="font-semibold text-navy-900 hover:underline">
+                <Link href="/login" className="font-semibold text-navy-900 dark:text-blue-400 hover:underline">
                   Sign in here
                 </Link>
               </div>
