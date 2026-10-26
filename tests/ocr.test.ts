@@ -39,6 +39,25 @@ describe('OCR Odometer Number Extractor', () => {
     expect(details.canonicalKm).toBe(77586.47);
   });
 
+  it('should accurately resolve LCD odometer cluster with ODO 123456 and MPH dial', () => {
+    const clusterSample = 'SPEEDOMETER 200 120 MPH ODO 123456';
+    const number = extractOdometerNumber(clusterSample);
+    expect(number).toBe(123456);
+
+    const details = extractOdometerDetails(clusterSample);
+    expect(details.proposedReading).toBe(123456);
+    expect(details.detectedUnit).toBe('mi');
+    // 123456 * 1.609344 = 198683.173248 -> 198683.17
+    expect(details.canonicalKm).toBe(198683.17);
+  });
+
+  it('should accurately resolve 7-segment LCD OCR artifacts (0D0 123456)', () => {
+    const segmentedOdo = 'CLUSTER DIAL 0D0 123456';
+    expect(extractOdometerNumber(segmentedOdo)).toBe(123456);
+    const details = extractOdometerDetails(segmentedOdo);
+    expect(details.proposedReading).toBe(123456);
+  });
+
   it('should return null if no numbers found', () => {
     expect(extractOdometerNumber('Check engine light')).toBeNull();
   });
@@ -116,6 +135,47 @@ describe('OCR Receipt Data Parser', () => {
     expect(res.fillingStation).toBe('MOBIL SERVICE STATION');
     expect(res.amount).toBe(25000);
     expect(res.quantityLitres).toBe(28.09);
+  });
+
+  it('should resolve degraded receipt headers with OCR character substitutions (T0TAL ENERGIES)', () => {
+    const degradedReceipt = `
+      T0TAL ENERGIES
+      STATION #02 LAGOS
+      DATE: 25/10/2026 11:20 AM
+      PRICE/L: 865.00
+      LITRES: 30.00 LTR
+      TOTAL: 25,950.00
+    `;
+    const res = extractReceiptData(degradedReceipt);
+    expect(res.fillingStation).toBe('TOTAL ENERGIES FILLING STATION');
+    expect(res.amount).toBe(25950);
+    expect(res.quantityLitres).toBe(30);
+  });
+
+  it('should mathematically recover missing total amount when unit rate and volume are available', () => {
+    const tornReceipt = `
+      TOTAL ENERGIES FILLING STATION
+      RATE: ₦865.00 / LTR
+      VOLUME: 50.00 LITRES
+      [TOTAL AMOUNT SMUDGED]
+    `;
+    const res = extractReceiptData(tornReceipt);
+    // 50 * 865 = 43250
+    expect(res.amount).toBe(43250);
+    expect(res.quantityLitres).toBe(50);
+  });
+
+  it('should mathematically recover missing volume in litres when amount and unit rate are available', () => {
+    const fadedReceipt = `
+      NNPC RETAIL
+      PRICE/LTR: ₦900.00
+      TOTAL PAID: ₦45,000.00
+      [VOLUME TORN AWAY]
+    `;
+    const res = extractReceiptData(fadedReceipt);
+    // 45000 / 900 = 50
+    expect(res.quantityLitres).toBe(50);
+    expect(res.amount).toBe(45000);
   });
 });
 

@@ -51,7 +51,8 @@ export function extractDashboardTelemetry(
 
 /**
  * Preprocesses an image to improve OCR accuracy on LCD/digital odometer clusters.
- * Performs grayscale conversion and contrast stretching.
+ * Uses an integral image adaptive thresholding algorithm (Sauvola-inspired local window mean)
+ * that isolates dark LCD 7-segment crystals from backlit screens, immune to global cowl shadows and glare.
  */
 export async function preprocessImageForOcr(imageSource: string | Blob): Promise<string | Blob> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
@@ -72,29 +73,63 @@ export async function preprocessImageForOcr(imageSource: string | Blob): Promise
           ctx.drawImage(img, 0, 0);
           const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const data = imgData.data;
+          const w = canvas.width;
+          const h = canvas.height;
 
-          let minLum = 255;
-          let maxLum = 0;
-          const luminances = new Float32Array(data.length / 4);
-
+          // 1. Grayscale luminance calculation
+          const luminances = new Float32Array(w * h);
           for (let i = 0; i < data.length; i += 4) {
-            const lum = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-            luminances[i / 4] = lum;
-            if (lum < minLum) minLum = lum;
-            if (lum > maxLum) maxLum = lum;
+            luminances[i / 4] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
           }
 
-          const range = maxLum - minLum || 1;
-          for (let i = 0; i < data.length; i += 4) {
-            let normalized = ((luminances[i / 4] - minLum) / range) * 255;
-            normalized = normalized > 130 ? 255 : normalized < 70 ? 0 : normalized;
-            data[i] = normalized;
-            data[i + 1] = normalized;
-            data[i + 2] = normalized;
+          // 2. Compute integral image for O(1) local window mean calculation
+          const integral = new Float64Array((w + 1) * (h + 1));
+          for (let y = 0; y < h; y++) {
+            let rowSum = 0;
+            const rowOffset = y * w;
+            const nextRowIntOffset = (y + 1) * (w + 1);
+            const currRowIntOffset = y * (w + 1);
+            for (let x = 0; x < w; x++) {
+              rowSum += luminances[rowOffset + x];
+              integral[nextRowIntOffset + (x + 1)] = integral[currRowIntOffset + (x + 1)] + rowSum;
+            }
+          }
+
+          // 3. Adaptive local thresholding (neighborhood radius ~ 15-25px)
+          const radius = Math.max(8, Math.min(24, Math.floor(w / 35)));
+          const k = 0.88; // contrast factor favoring dark LCD digits on light/backlit background
+
+          for (let y = 0; y < h; y++) {
+            const y0 = Math.max(0, y - radius);
+            const y1 = Math.min(h - 1, y + radius);
+            const intRowY1 = (y1 + 1) * (w + 1);
+            const intRowY0 = y0 * (w + 1);
+
+            for (let x = 0; x < w; x++) {
+              const x0 = Math.max(0, x - radius);
+              const x1 = Math.min(w - 1, x + radius);
+              const count = (x1 - x0 + 1) * (y1 - y0 + 1);
+
+              const sum =
+                integral[intRowY1 + (x1 + 1)] -
+                integral[intRowY0 + (x1 + 1)] -
+                integral[intRowY1 + x0] +
+                integral[intRowY0 + x0];
+
+              const mean = sum / count;
+              const idx = (y * w + x) * 4;
+              const lum = luminances[y * w + x];
+
+              // Pixel is dark digit (0) if lum < mean * k, otherwise background (255)
+              const val = lum < mean * k ? 0 : 255;
+              data[idx] = val;
+              data[idx + 1] = val;
+              data[idx + 2] = val;
+            }
           }
 
           ctx.putImageData(imgData, 0, 0);
-          resolve(canvas.toDataURL('image/jpeg', 0.9));
+          resolve(canvas.toDataURL('image/jpeg', 0.92));
         } catch {
           resolve(imageSource);
         }
@@ -206,17 +241,17 @@ export function extractReceiptData(text: string): ParsedReceiptData {
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
   const upper = text.toUpperCase();
 
-  // 1. Detect Filling Station Name
+  // 1. Detect Filling Station Name (exact and fuzzy brand dictionary matching)
   let fillingStation: string | null = null;
   const knownStations = [
-    { patterns: ['TOTAL ENERGIES', 'TOTALENERGIES', 'TOTAL FILLING', 'TOTAL PETROLEUM'], standard: 'TOTAL ENERGIES FILLING STATION' },
-    { patterns: ['NNPC RETAIL', 'NNPC', 'NIGERIAN NATIONAL PETROLEUM'], standard: 'NNPC RETAIL' },
-    { patterns: ['MOBIL', '11 PLC', 'EXXONMOBIL'], standard: 'MOBIL SERVICE STATION' },
-    { patterns: ['OANDO'], standard: 'OANDO SERVICE STATION' },
-    { patterns: ['CONOIL'], standard: 'CONOIL SERVICE STATION' },
+    { patterns: ['TOTAL ENERGIES', 'TOTALENERGIES', 'TOTAL FILLING', 'TOTAL PETROLEUM', 'TOTAL SERVICE', 'T0TAL ENERGIES', 'T0TALENERGIES'], standard: 'TOTAL ENERGIES FILLING STATION' },
+    { patterns: ['NNPC RETAIL', 'NNPC', 'NIGERIAN NATIONAL PETROLEUM', 'N.N.P.C'], standard: 'NNPC RETAIL' },
+    { patterns: ['MOBIL', '11 PLC', 'EXXONMOBIL', 'M0BIL'], standard: 'MOBIL SERVICE STATION' },
+    { patterns: ['OANDO', '0AND0'], standard: 'OANDO SERVICE STATION' },
+    { patterns: ['CONOIL', 'C0N0IL'], standard: 'CONOIL SERVICE STATION' },
     { patterns: ['ARDOVA', 'AP FILLING', 'AFRICAN PETROLEUM'], standard: 'ARDOVA PLC (AP)' },
-    { patterns: ['BOVAS'], standard: 'BOVAS FILLING STATION' },
-    { patterns: ['MRS OIL', 'MRS FILLING', 'MRS'], standard: 'MRS OIL SERVICE STATION' },
+    { patterns: ['BOVAS', 'B0VAS'], standard: 'BOVAS FILLING STATION' },
+    { patterns: ['MRS OIL', 'MRS FILLING', 'MRS SERVICE'], standard: 'MRS OIL SERVICE STATION' },
     { patterns: ['NIPCO'], standard: 'NIPCO SERVICE STATION' },
     { patterns: ['SHELL'], standard: 'SHELL SERVICE STATION' },
     { patterns: ['RAINOIL'], standard: 'RAINOIL SERVICE STATION' },
@@ -231,7 +266,7 @@ export function extractReceiptData(text: string): ParsedReceiptData {
     }
   }
 
-  // Fallback filling station to first plausible brand line
+  // Fallback filling station to first plausible brand line (top 5 lines)
   if (!fillingStation && lines.length > 0) {
     const ignoredKeywords = /RECEIPT|CUSTOMER|WELCOME|INVOICE|PUMP|DATE|TIME|CASH|CARD|TERMINAL|MERCHANT|SLIP/i;
     for (const line of lines.slice(0, 5)) {
@@ -276,7 +311,7 @@ export function extractReceiptData(text: string): ParsedReceiptData {
   let amount: number | null = null;
   for (const line of lines) {
     if (/PRICE|RATE|\/L|PER/i.test(line)) continue;
-    const match = line.match(/(?:TOTAL|AMOUNT|NET|PAID|PAYMENT|SUM)[:\s]*(?:NGN|₦)?[:\s]*([0-9,]+(?:\.[0-9]{2})?)/i);
+    const match = line.match(/(?:TOTAL\s+(?:PAID|AMOUNT|DUE)|NET\s+AMOUNT|TOTAL|AMOUNT|NET|PAID|PAYMENT|SUM)[:\s]*(?:NGN|₦)?[:\s]*([0-9,]+(?:\.[0-9]{2})?)/i);
     if (match && match[1]) {
       const num = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(num) && num > 0) {
@@ -345,6 +380,26 @@ export function extractReceiptData(text: string): ParsedReceiptData {
     }
   }
 
+  // 5. Detect Unit Price / Rate for Mathematical Cross-Check and Recovery
+  let unitRate: number | null = null;
+  for (const line of lines) {
+    const rateMatch = line.match(/(?:RATE(?:\/L(?:TR)?)?|PRICE(?:\/L(?:TR)?)?|PER\s*L(?:TR)?|@)[:\s]*(?:NGN|₦)?[:\s]*([0-9,]+(?:\.[0-9]{2})?)/i);
+    if (rateMatch && rateMatch[1]) {
+      const parsedRate = parseFloat(rateMatch[1].replace(/,/g, ''));
+      if (!isNaN(parsedRate) && parsedRate >= 200 && parsedRate <= 2500) {
+        unitRate = parsedRate;
+        break;
+      }
+    }
+  }
+
+  // Cross-Field Mathematical Recovery: Amount = Volume * Rate
+  if (!amount && quantityLitres && unitRate) {
+    amount = Math.round(quantityLitres * unitRate * 100) / 100;
+  } else if (!quantityLitres && amount && unitRate) {
+    quantityLitres = Math.round((amount / unitRate) * 100) / 100;
+  }
+
   return {
     fillingStation,
     vendorName: fillingStation,
@@ -356,10 +411,17 @@ export function extractReceiptData(text: string): ParsedReceiptData {
 
 /**
  * Detects whether the vehicle instrument cluster displays in Kilometers or Miles.
+ * Prioritizes explicit MPH markings on speedometers/dials over ambient text noise.
  */
 export function detectOdometerUnit(text: string): OdometerUnit {
   if (!text) return 'km';
   const upper = text.toUpperCase();
+
+  // Explicit MPH detection on dial or display takes absolute priority
+  if (/\b(MPH|M\.P\.H|MILES)\b/i.test(upper) || /SPEED.*?MPH/i.test(upper)) {
+    return 'mi';
+  }
+
   const hasMiles = /\b(MI|MILES|MPH)\b/i.test(upper) || /ODO.*?\bMI\b/i.test(upper);
   const hasKm = /\b(KM|KMS|KM\/H|KMPH)\b/i.test(upper) || /ODO.*?\bKM\b/i.test(upper);
 
@@ -377,7 +439,7 @@ export interface OdometerAnalysis {
 /**
  * Advanced heuristic parser that isolates the true odometer reading from speedometers,
  * trip meters (e.g. TRIP A 705.5), temperatures, and clock digits.
- * Resolves edge-cases where 057612 could be misconstrued as 7,055 KM.
+ * Accurately extracts readings such as "123456" with MPH and "057612" with KM.
  */
 export function extractOdometerDetails(text: string): OdometerAnalysis {
   if (!text) {
@@ -386,19 +448,22 @@ export function extractOdometerDetails(text: string): OdometerAnalysis {
 
   const detectedUnit = detectOdometerUnit(text);
 
-  // Normalize common OCR character confusions
-  const sanitized = text
-    .toUpperCase()
-    .replace(/[O]/g, '0')
-    .replace(/[IL|]/g, '1')
-    .replace(/[S]/g, '5')
-    .replace(/[B]/g, '8');
+  // Helper to sanitize common 7-segment and alphanumeric misidentifications into pure digits
+  const cleanToDigits = (str: string): string =>
+    str
+      .toUpperCase()
+      .replace(/[O]/g, '0')
+      .replace(/[IL|]/g, '1')
+      .replace(/[S]/g, '5')
+      .replace(/[B]/g, '8')
+      .replace(/[^0-9.]/g, '');
 
-  // 1. Direct ODO / ODOMETER / TOTAL pattern with whole integers
-  const odoDirectMatch = sanitized.match(/(?:ODO|ODOMETER|TOTAL|TOTAL ODO)[:\s]*([0-9]{4,7})/i);
-  if (odoDirectMatch && odoDirectMatch[1]) {
-    const reading = parseFloat(odoDirectMatch[1]);
-    if (reading >= 100 && reading <= 999999) {
+  // 1. Direct ODO / 0D0 / ODOMETER / TOTAL pattern with numbers
+  const directOdoMatch = text.match(/(?:ODO|0D0|ODOMETER|TOTAL|T0TAL|TOTAL ODO)[:\s]*([0-9OILS.B]{4,7})/i);
+  if (directOdoMatch && directOdoMatch[1]) {
+    const cleaned = cleanToDigits(directOdoMatch[1]);
+    const reading = parseFloat(cleaned);
+    if (!isNaN(reading) && reading >= 100 && reading <= 999999) {
       return {
         rawText: text,
         proposedReading: reading,
@@ -409,7 +474,7 @@ export function extractOdometerDetails(text: string): OdometerAnalysis {
   }
 
   // 2. Tokenize and filter out trip meters or gauge numbers
-  const tokens = sanitized.split(/\s+/);
+  const tokens = text.split(/\s+/);
   type Candidate = { num: number; hasDecimal: boolean; nearOdo: boolean; length: number };
   const candidates: Candidate[] = [];
 
@@ -418,12 +483,14 @@ export function extractOdometerDetails(text: string): OdometerAnalysis {
     // Discard trip meter tokens immediately (trip meters have decimal points or follow TRIP)
     if (/TRIP/i.test(prevToken) || /TRIP/i.test(token)) return;
 
-    const cleaned = token.replace(/[^0-9.]/g, '');
+    const cleaned = cleanToDigits(token);
     if (!cleaned) return;
     const hasDecimal = cleaned.includes('.');
     const num = parseFloat(cleaned);
     if (!isNaN(num) && num >= 100 && num <= 999999) {
-      const nearOdo = /ODO|TOTAL/i.test(prevToken) || /ODO|TOTAL/i.test(token);
+      const nearOdo =
+        /ODO|0D0|TOTAL|T0TAL/i.test(prevToken) ||
+        /ODO|0D0|TOTAL|T0TAL/i.test(token);
       const digitsCount = cleaned.replace(/\./g, '').length;
       candidates.push({
         num,
@@ -442,11 +509,11 @@ export function extractOdometerDetails(text: string): OdometerAnalysis {
     if (!a.hasDecimal) scoreA += 50;
     if (!b.hasDecimal) scoreB += 50;
 
-    if (a.nearOdo) scoreA += 40;
-    if (b.nearOdo) scoreB += 40;
+    if (a.nearOdo) scoreA += 60;
+    if (b.nearOdo) scoreB += 60;
 
-    if (a.length >= 5 && a.length <= 6) scoreA += 30;
-    if (b.length >= 5 && b.length <= 6) scoreB += 30;
+    if (a.length >= 5 && a.length <= 6) scoreA += 35;
+    if (b.length >= 5 && b.length <= 6) scoreB += 35;
 
     return scoreB - scoreA;
   });
@@ -473,43 +540,44 @@ export function extractOdometerDetails(text: string): OdometerAnalysis {
 
 /**
  * Regex & heuristic parser to find the most plausible odometer reading from raw OCR text.
- * Prioritizes 5-7 digit integers over decimal trip meters.
+ * Prioritizes 5-7 digit integers over decimal trip meters and handles 7-segment digit substitutions.
  */
 export function extractOdometerNumber(text: string): number | null {
   if (!text) return null;
 
-  // Clean common noise
-  const sanitized = text
-    .toUpperCase()
-    .replace(/[O]/g, '0')
-    .replace(/[IL|]/g, '1')
-    .replace(/[S]/g, '5')
-    .replace(/[B]/g, '8');
+  const cleanToDigits = (str: string): string =>
+    str
+      .toUpperCase()
+      .replace(/[O]/g, '0')
+      .replace(/[IL|]/g, '1')
+      .replace(/[S]/g, '5')
+      .replace(/[B]/g, '8')
+      .replace(/[^0-9.]/g, '');
 
-  // Direct match for ODO / ODOMETER / TOTAL
-  const directMatch = sanitized.match(/(?:ODO|ODOMETER|TOTAL)[:\s]*([0-9]{4,7})/i);
+  // Direct match for ODO / 0D0 / ODOMETER / TOTAL
+  const directMatch = text.match(/(?:ODO|0D0|ODOMETER|TOTAL|T0TAL)[:\s]*([0-9OILS.B]{4,7})/i);
   if (directMatch && directMatch[1]) {
-    const val = parseFloat(directMatch[1]);
-    if (val >= 100 && val <= 999999) return val;
+    const val = parseFloat(cleanToDigits(directMatch[1]));
+    if (!isNaN(val) && val >= 100 && val <= 999999) return val;
   }
 
   // Tokenize and prioritize whole numbers (ignoring TRIP)
-  const tokens = sanitized.split(/\s+/);
+  const tokens = text.split(/\s+/);
   const candidates: { num: number; score: number }[] = [];
 
   tokens.forEach((token, index) => {
     const prevToken = index > 0 ? tokens[index - 1] : '';
     if (/TRIP/i.test(prevToken) || /TRIP/i.test(token)) return;
 
-    const cleaned = token.replace(/[^0-9.]/g, '');
+    const cleaned = cleanToDigits(token);
     if (!cleaned) return;
     const num = parseFloat(cleaned);
     if (!isNaN(num) && num >= 100 && num <= 999999) {
       let score = 0;
-      if (!cleaned.includes('.')) score += 30;
-      if (/ODO|TOTAL/i.test(prevToken)) score += 40;
+      if (!cleaned.includes('.')) score += 35;
+      if (/ODO|0D0|TOTAL|T0TAL/i.test(prevToken)) score += 50;
       const digitsLen = cleaned.replace(/\./g, '').length;
-      if (digitsLen >= 5 && digitsLen <= 6) score += 20;
+      if (digitsLen >= 5 && digitsLen <= 6) score += 25;
       candidates.push({ num, score });
     }
   });
@@ -520,7 +588,7 @@ export function extractOdometerNumber(text: string): number | null {
   }
 
   // Fallback to integer matches
-  const matches = sanitized.match(/\b\d{3,7}(\.\d{1,2})?\b/g);
+  const matches = cleanToDigits(text).match(/\b\d{4,7}(\.\d{1,2})?\b/g);
   if (matches && matches.length > 0) {
     for (const match of matches) {
       if (match.includes('.')) continue; // avoid trip decimals
