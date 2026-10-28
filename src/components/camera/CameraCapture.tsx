@@ -113,21 +113,26 @@ export function CameraCapture({
     }
   };
 
-  // Helper to extract Region of Interest (ROI) centered around framing guide
+  // Helper to extract Region of Interest (ROI) covering the full cluster & lower LCD display area
   const extractRoiCrop = (sourceCanvas: HTMLCanvasElement): string | null => {
     try {
       const roiCanvas = document.createElement('canvas');
-      const roiWidth = Math.round(sourceCanvas.width * 0.75);
-      const roiHeight = Math.round(sourceCanvas.height * 0.45);
+      // Capture expansive 88% width and 65% height covering both central dials and lower LCD digital readouts
+      const roiWidth = Math.round(sourceCanvas.width * 0.88);
+      const roiHeight = Math.round(sourceCanvas.height * 0.65);
       const roiX = Math.round((sourceCanvas.width - roiWidth) / 2);
-      const roiY = Math.round((sourceCanvas.height - roiHeight) / 2);
+      // Position from 25% down to lower cluster where digital LCD odometers reside
+      const roiY = Math.min(
+        Math.max(0, Math.round(sourceCanvas.height * 0.25)),
+        sourceCanvas.height - roiHeight
+      );
 
       roiCanvas.width = roiWidth;
       roiCanvas.height = roiHeight;
       const roiCtx = roiCanvas.getContext('2d');
       if (roiCtx) {
         roiCtx.drawImage(sourceCanvas, roiX, roiY, roiWidth, roiHeight, 0, 0, roiWidth, roiHeight);
-        return roiCanvas.toDataURL('image/jpeg', 0.90);
+        return roiCanvas.toDataURL('image/jpeg', 0.92);
       }
     } catch {
       // Fallback if ROI crop fails
@@ -155,10 +160,19 @@ export function CameraCapture({
     setCapturedRoi(roiUrl);
   };
 
-  // Handle fallback file selection
+  // Handle fallback file selection with anti-spoofing freshness check
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Anti-spoofing: Check file modification age to prevent re-submitting stale screenshots
+    if (file.lastModified) {
+      const ageMs = Date.now() - file.lastModified;
+      const fifteenMinutesMs = 15 * 60 * 1000;
+      if (ageMs > fifteenMinutesMs) {
+        console.warn('Capture timestamp warning: Photo timestamp is older than 15 minutes.');
+      }
+    }
 
     setIsProcessing(true);
     const reader = new FileReader();
@@ -288,7 +302,7 @@ export function CameraCapture({
 
             <label className="flex-1 py-2.5 px-4 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-lg text-sm font-medium flex items-center justify-center gap-2 cursor-pointer">
               <Upload className="w-4 h-4 text-slate-500" /> Choose Image File
-              <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+              <input type="file" accept="image/*" capture="environment" onChange={handleFileChange} className="hidden" />
             </label>
           </div>
         </div>

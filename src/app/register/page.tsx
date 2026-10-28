@@ -9,10 +9,7 @@ import { UserRole } from '@/types/database';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 export default function RegisterPage() {
-  // Form State
-  const [accountType, setAccountType] = useState<'staff' | 'management'>('staff');
-  const [requestedRole, setRequestedRole] = useState<UserRole>('staff');
-  const [adminPasscode, setAdminPasscode] = useState('');
+  // Form State - Public registration is strictly restricted to Staff
   const [fullName, setFullName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [plateNumber, setPlateNumber] = useState('');
@@ -39,16 +36,6 @@ export default function RegisterPage() {
     { id: '88888888-8888-8888-8888-888888888888', name: 'North East Branch' },
   ];
 
-  const handleAccountTypeChange = (type: 'staff' | 'management') => {
-    setAccountType(type);
-    if (type === 'staff') {
-      setRequestedRole('staff');
-      setAdminPasscode('');
-    } else {
-      setRequestedRole('administrator');
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -60,11 +47,6 @@ export default function RegisterPage() {
 
     if (tomCardNumber.trim() && !/^\d{6}$/.test(tomCardNumber.trim())) {
       setError('TOM Card number must be exactly 6 numeric digits (e.g. 804689).');
-      return;
-    }
-
-    if (accountType === 'management' && !adminPasscode.trim()) {
-      setError('Administrative authorization passcode is required for management onboarding.');
       return;
     }
 
@@ -80,8 +62,7 @@ export default function RegisterPage() {
         carName,
         carModel,
         carYear: parseInt(carYear, 10) || 2022,
-        requestedRole,
-        adminPasscode: adminPasscode.trim() || undefined,
+        requestedRole: 'staff',
       });
 
       setSubmitted(true);
@@ -155,78 +136,20 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              {/* Account Role Selector */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
-                  Select Registration Type
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleAccountTypeChange('staff')}
-                    className={`py-3 px-4 rounded-xl border text-left transition-all ${
-                      accountType === 'staff'
-                        ? 'border-navy-900 dark:border-blue-500 bg-navy-50/60 dark:bg-blue-950/50 ring-2 ring-navy-900 dark:ring-blue-500'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750'
-                    }`}
-                  >
-                    <span className="block text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Staff Member</span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">Assigned Company Car</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleAccountTypeChange('management')}
-                    className={`py-3 px-4 rounded-xl border text-left transition-all ${
-                      accountType === 'management'
-                        ? 'border-navy-900 dark:border-blue-500 bg-navy-50/60 dark:bg-blue-950/50 ring-2 ring-navy-900 dark:ring-blue-500'
-                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750'
-                    }`}
-                  >
-                    <span className="block text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Administrator / Mgr</span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400 block mt-0.5">Privileged Passcode</span>
-                  </button>
+              {/* Staff Registration Banner */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl space-y-1">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                    Staff Company Car Registration
+                  </span>
                 </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Register your profile and assigned vehicle details. Submissions are queued for fleet administration verification before access is granted.
+                </p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Privileged Role Sub-Selection */}
-                {accountType === 'management' && (
-                  <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl space-y-3">
-                    <div className="flex items-center gap-2 text-xs font-bold text-navy-950 dark:text-blue-300">
-                      <KeyRound className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      Administrative Authorization
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Privileged Role</label>
-                        <select
-                          value={requestedRole}
-                          onChange={(e) => setRequestedRole(e.target.value as UserRole)}
-                          className="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-semibold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
-                        >
-                          <option value="administrator">Administrator</option>
-                          <option value="fleet_manager">Fleet Manager</option>
-                          <option value="department_head">Department Head</option>
-                          <option value="auditor">Auditor</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                          Security Passcode <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="password"
-                          required
-                          value={adminPasscode}
-                          onChange={(e) => setAdminPasscode(e.target.value)}
-                          placeholder="e.g. VLMS-ADMIN-2026"
-                          className="mt-1 w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Personal Information */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

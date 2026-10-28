@@ -10,6 +10,7 @@ import { VLMSService } from '@/lib/services/vlms-service';
 import { VehicleAssignment, Profile, DailyLog, TomCard, FuelTransaction } from '@/types/database';
 import { formatCurrency, formatOdometer, getBusinessDate } from '@/lib/utils';
 import { processReceiptImage, ReceiptOcrResult } from '@/lib/ocr/processor';
+import { createClient } from '@/lib/supabase/client';
 import {
   Fuel,
   CreditCard,
@@ -57,8 +58,19 @@ export default function FuelPurchasePage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const staff = await VLMSService.getStaffProfile('p-staff-01');
-        const asg = await VLMSService.getActiveAssignment('p-staff-01');
+        const supabase = createClient();
+        const { data: authData } = await supabase.auth.getUser();
+        let targetUserId = 'p-staff-01';
+
+        if (authData?.user) {
+          const matchedProfile = await VLMSService.getStaffProfileByAuthId(authData.user.id);
+          if (matchedProfile) {
+            targetUserId = matchedProfile.id;
+          }
+        }
+
+        const staff = await VLMSService.getStaffProfile(targetUserId);
+        const asg = await VLMSService.getActiveAssignment(targetUserId);
         if (staff) setProfile(staff);
         if (asg) {
           setAssignment(asg);
@@ -224,7 +236,7 @@ export default function FuelPurchasePage() {
 
       const { transaction } = await VLMSService.submitFuelTransaction({
         vehicleId: assignment.vehicle_id,
-        userId: 'p-staff-01',
+        userId: profile?.id ?? 'p-staff-01',
         dailyLogId: todayLog?.id ?? null,
         paymentMethod,
         tomCardId: paymentMethod === 'tom_card' ? tomCard?.id : null,

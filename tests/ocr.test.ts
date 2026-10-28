@@ -58,6 +58,17 @@ describe('OCR Odometer Number Extractor', () => {
     expect(details.proposedReading).toBe(123456);
   });
 
+  it('should accurately resolve cluster with reading 091308 and dual MPH km/h dial markings', () => {
+    const cluster = '20 30 60 90 100 110 120 MPH km/h 091308';
+    const number = extractOdometerNumber(cluster);
+    expect(number).toBe(91308);
+
+    const details = extractOdometerDetails(cluster);
+    expect(details.proposedReading).toBe(91308);
+    expect(details.detectedUnit).toBe('mi');
+    expect(details.canonicalKm).toBe(toCanonicalKm(91308, 'mi'));
+  });
+
   it('should return null if no numbers found', () => {
     expect(extractOdometerNumber('Check engine light')).toBeNull();
   });

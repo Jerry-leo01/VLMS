@@ -76,11 +76,17 @@ export async function preprocessImageForOcr(imageSource: string | Blob): Promise
           const w = canvas.width;
           const h = canvas.height;
 
-          // 1. Grayscale luminance calculation
+          // 1. Grayscale luminance calculation & global backdrop polarity estimation
           const luminances = new Float32Array(w * h);
+          let globalLumSum = 0;
           for (let i = 0; i < data.length; i += 4) {
-            luminances[i / 4] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            luminances[i / 4] = lum;
+            globalLumSum += lum;
           }
+          const globalAvgLum = globalLumSum / (w * h);
+          // Dark backdrop clusters (e.g. glowing LED/OLED green/teal digits on black dashboard)
+          const isDarkBackdrop = globalAvgLum < 105;
 
           // 2. Compute integral image for O(1) local window mean calculation
           const integral = new Float64Array((w + 1) * (h + 1));
@@ -95,9 +101,9 @@ export async function preprocessImageForOcr(imageSource: string | Blob): Promise
             }
           }
 
-          // 3. Adaptive local thresholding (neighborhood radius ~ 15-25px)
+          // 3. Adaptive local thresholding with bi-directional display polarity handling
           const radius = Math.max(8, Math.min(24, Math.floor(w / 35)));
-          const k = 0.88; // contrast factor favoring dark LCD digits on light/backlit background
+          const k = 0.88; // contrast factor for standard dark digits on backlit LCD
 
           for (let y = 0; y < h; y++) {
             const y0 = Math.max(0, y - radius);
@@ -120,8 +126,16 @@ export async function preprocessImageForOcr(imageSource: string | Blob): Promise
               const idx = (y * w + x) * 4;
               const lum = luminances[y * w + x];
 
-              // Pixel is dark digit (0) if lum < mean * k, otherwise background (255)
-              const val = lum < mean * k ? 0 : 255;
+              // Normalize to black digits (0) on white background (255) for optimal Tesseract accuracy
+              let val: number;
+              if (isDarkBackdrop) {
+                // Inverted polarity: bright glowing digits on dark dashboard
+                val = lum > mean * 1.15 || lum > mean + 18 ? 0 : 255;
+              } else {
+                // Standard polarity: dark LCD digits on light/backlit screen
+                val = lum < mean * k ? 0 : 255;
+              }
+
               data[idx] = val;
               data[idx + 1] = val;
               data[idx + 2] = val;
@@ -143,11 +157,16 @@ export async function preprocessImageForOcr(imageSource: string | Blob): Promise
 }
 
 /**
- * Extracts candidate numeric odometer reading and unit from an image data URL or Blob.
+ * Multi-Pass Odometer OCR Engine.
+ * Evaluates high-resolution Region of Interest (Pass 1) and falls back to full-frame
+ * analysis (Pass 2) if confidence is low, ensuring LCD numbers are never missed.
  */
-export async function processOdometerImage(imageSource: string | Blob): Promise<OcrResult> {
-  try {
-    const preprocessed = await preprocessImageForOcr(imageSource);
+export async function processOdometerImage(
+  imageSource: string | Blob,
+  roiSource?: string | Blob
+): Promise<OcrResult> {
+  const evaluateSingle = async (src: string | Blob): Promise<OcrResult> => {
+    const preprocessed = await preprocessImageForOcr(src);
     const result = await Tesseract.recognize(preprocessed, 'eng', {
       logger: () => {}, // silent logger
     });
@@ -155,7 +174,6 @@ export async function processOdometerImage(imageSource: string | Blob): Promise<
     const rawText = result.data.text || '';
     const confidence = Math.round(result.data.confidence || 0);
 
-    // Extract odometer numbers and detect unit
     const details = extractOdometerDetails(rawText);
 
     return {
@@ -166,6 +184,36 @@ export async function processOdometerImage(imageSource: string | Blob): Promise<
       confidence,
       proposedKm: details.canonicalKm,
     };
+  };
+
+  try {
+    // Multi-pass execution
+    if (roiSource) {
+      // Pass 1: Test ROI
+      const roiResult = await evaluateSingle(roiSource);
+
+      // If Pass 1 found a solid reading with high confidence (>= 50%), check if full frame indicates MPH
+      if (roiResult.proposedReading !== null && roiResult.confidence >= 50) {
+        if (roiResult.detectedUnit === 'km' && /\b(MPH|M\.P\.H|MILES)\b/i.test(roiResult.rawText)) {
+          roiResult.detectedUnit = 'mi';
+          roiResult.canonicalKm = toCanonicalKm(roiResult.proposedReading, 'mi');
+          roiResult.proposedKm = roiResult.canonicalKm;
+        }
+        return roiResult;
+      }
+
+      // Pass 2: Fallback to full frame because ROI was either clipped or had low confidence (<50%)
+      const fullResult = await evaluateSingle(imageSource);
+      if (fullResult.proposedReading !== null) {
+        return fullResult;
+      }
+
+      // Pick the highest confidence candidate between ROI and full frame
+      return (roiResult.confidence || 0) >= (fullResult.confidence || 0) ? roiResult : fullResult;
+    }
+
+    // Direct single source evaluation
+    return await evaluateSingle(imageSource);
   } catch (err) {
     console.error('OCR processing error:', err);
     return {
@@ -418,7 +466,7 @@ export function detectOdometerUnit(text: string): OdometerUnit {
   const upper = text.toUpperCase();
 
   // Explicit MPH detection on dial or display takes absolute priority
-  if (/\b(MPH|M\.P\.H|MILES)\b/i.test(upper) || /SPEED.*?MPH/i.test(upper)) {
+  if (/\b(MPH|M\.P\.H|MILES)\b/i.test(upper) || /SPEED.*?MPH/i.test(upper) || upper.includes('MPH')) {
     return 'mi';
   }
 

@@ -26,14 +26,15 @@ export function OcrConfirmation({ imageSrc, roiImageSrc, onConfirmed }: OcrConfi
   // Unit and reading state
   const [sourceUnit, setSourceUnit] = useState<OdometerUnit>('km');
   const [userReadingInput, setUserReadingInput] = useState<string>('');
+  const [isAttached, setIsAttached] = useState<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
     const runOcr = async () => {
       setOcrLoading(true);
-      // Run OCR on the isolated ROI if available, otherwise on full image
-      const targetSource = roiImageSrc || imageSrc;
-      const res = await processOdometerImage(targetSource);
+      setIsAttached(false);
+      // Run OCR with multi-pass support (evaluating both ROI and full frame if available)
+      const res = await processOdometerImage(imageSrc, roiImageSrc);
 
       if (isMounted) {
         setOcrData(res);
@@ -50,8 +51,14 @@ export function OcrConfirmation({ imageSrc, roiImageSrc, onConfirmed }: OcrConfi
     };
   }, [imageSrc, roiImageSrc]);
 
-  const numericReading = parseFloat(userReadingInput);
-  const isValidNumber = !isNaN(numericReading) && numericReading >= 0;
+  // Clean and parse input safely without HTML5 type="number" trailing-dot parsing drops
+  const sanitizedInput = userReadingInput.trim();
+  const numericReading = parseFloat(sanitizedInput);
+  const isValidNumber =
+    sanitizedInput.length > 0 &&
+    !isNaN(numericReading) &&
+    numericReading >= 0 &&
+    !sanitizedInput.endsWith('.');
 
   // High-precision canonical calculation (1 mile = 1.609344 km) without cumulative drift
   const canonicalKm = isValidNumber ? toCanonicalKm(numericReading, sourceUnit) : 0;
@@ -65,11 +72,22 @@ export function OcrConfirmation({ imageSrc, roiImageSrc, onConfirmed }: OcrConfi
 
   const handleUnitToggle = (newUnit: OdometerUnit) => {
     if (newUnit === sourceUnit) return;
+    setIsAttached(false);
     setSourceUnit(newUnit);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setIsAttached(false);
+    // Allow digits and at most one decimal point
+    const raw = e.target.value.replace(/[^0-9.]/g, '');
+    const parts = raw.split('.');
+    const clean = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : raw;
+    setUserReadingInput(clean);
   };
 
   const handleConfirm = () => {
     if (!isValidNumber) return;
+    setIsAttached(true);
     onConfirmed({
       confirmedKm: canonicalKm,
       sourceUnit,
@@ -186,18 +204,22 @@ export function OcrConfirmation({ imageSrc, roiImageSrc, onConfirmed }: OcrConfi
             <div className="relative">
               <input
                 id="confirmedReading"
-                type="number"
-                step="0.1"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={userReadingInput}
-                onChange={(e) => setUserReadingInput(e.target.value)}
+                onChange={handleInputChange}
                 placeholder={sourceUnit === 'mi' ? 'e.g. 57612' : 'e.g. 92717'}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-lg font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800 focus:border-transparent"
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-lg font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800 focus:border-transparent transition-all"
               />
               <span className="absolute right-3 top-3 text-xs font-bold text-slate-400 uppercase">
                 {sourceUnit}
               </span>
             </div>
+            {sanitizedInput.endsWith('.') && (
+              <p className="text-[11px] text-amber-600 font-medium">
+                Please complete typing the decimal value (e.g. {sanitizedInput}0) or remove the trailing period.
+              </p>
+            )}
           </div>
 
           {/* Live Canonical Conversion Display */}
@@ -227,14 +249,28 @@ export function OcrConfirmation({ imageSrc, roiImageSrc, onConfirmed }: OcrConfi
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={!isValidNumber || numericReading <= 0}
-            className="w-full py-2.5 px-4 bg-navy-900 hover:bg-navy-800 disabled:opacity-50 text-white rounded-lg text-sm font-semibold flex items-center justify-center gap-2 shadow-sm transition-colors"
-          >
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Confirm & Attach Reading
-          </button>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={handleConfirm}
+              disabled={!isValidNumber || numericReading <= 0}
+              className={`w-full py-3 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-all ${
+                isAttached
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-500 ring-offset-2'
+                  : 'bg-navy-900 hover:bg-navy-800 disabled:opacity-50 text-white'
+              }`}
+            >
+              <CheckCircle2 className={`w-5 h-5 ${isAttached ? 'text-white' : 'text-emerald-400'}`} />
+              {isAttached
+                ? `✓ Reading Attached: ${numericReading.toLocaleString()} ${sourceUnit.toUpperCase()}`
+                : 'Confirm & Attach Reading'}
+            </button>
+            {isAttached && (
+              <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 text-center font-medium animate-fadeIn">
+                ✓ Reading locked & attached to submission payload ({formatOdometer(canonicalKm, 'km')}). Proceed below to submit.
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

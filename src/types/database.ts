@@ -46,6 +46,7 @@ export interface Profile {
   id: string;
   auth_user_id: string;
   full_name: string;
+  email?: string | null;
   phone_number?: string | null;
   employee_id?: string | null;
   office_id: string | null;

@@ -95,6 +95,7 @@ const store: DataStore = {
       id: 'p-admin-01',
       auth_user_id: 'auth-admin-01',
       full_name: 'Babajide Adeleke',
+      email: 'admin@vlms.ng',
       employee_id: 'EMP-ADM-01',
       office_id: '11111111-1111-1111-1111-111111111111',
       status: 'active',
@@ -105,6 +106,7 @@ const store: DataStore = {
       id: 'p-staff-01',
       auth_user_id: 'auth-staff-01',
       full_name: 'Chukwuma Eze',
+      email: 'chukwuma@vlms.ng',
       employee_id: 'EMP-DRV-042',
       office_id: '11111111-1111-1111-1111-111111111111',
       status: 'active',
@@ -258,6 +260,83 @@ export const VLMSService = {
     if (!asg) return undefined;
     const vehicle = store.vehicles.find((v) => v.id === asg.vehicle_id);
     return { ...asg, vehicle };
+  },
+
+  async getActiveAssignmentByVehicle(vehicleId: string): Promise<VehicleAssignment | undefined> {
+    const asg = store.assignments.find((a) => a.vehicle_id === vehicleId && a.ends_at === null);
+    if (!asg) return undefined;
+    const vehicle = store.vehicles.find((v) => v.id === asg.vehicle_id);
+    return { ...asg, vehicle };
+  },
+
+  async getPendingRegistrationByPlate(plateNumber: string): Promise<RegistrationRequest | undefined> {
+    const normalized = normalizePlateNumber(plateNumber);
+    return store.registrationRequests.find(
+      (r) => r.status === 'pending' && normalizePlateNumber(r.requested_plate_number) === normalized
+    );
+  },
+
+  async getUserRole(userId: string): Promise<UserRole | undefined> {
+    const roleRecord = store.userRoles.find((r) => r.userId === userId);
+    return roleRecord?.role;
+  },
+
+  async getStaffProfileByAuthId(authUserId: string): Promise<Profile | undefined> {
+    const profile = store.profiles.find((p) => p.auth_user_id === authUserId);
+    if (!profile) return undefined;
+    const roles = store.userRoles.filter((r) => r.userId === profile.id).map((r) => r.role);
+    const office = store.offices.find((o) => o.id === profile.office_id);
+    return { ...profile, roles, office };
+  },
+
+  async getUserRoleByEmail(email: string): Promise<UserRole | undefined> {
+    const profile = store.profiles.find((p) => p.email === email.trim().toLowerCase());
+    if (!profile) return undefined;
+    return this.getUserRole(profile.id);
+  },
+
+  /**
+   * Secure Super-Admin Provisioning
+   * Admin accounts can only be created by an authenticated administrator.
+   */
+  async provisionAdminUser(input: {
+    fullName: string;
+    email: string;
+    officeId: string;
+    role: 'administrator' | 'fleet_manager' | 'department_head' | 'auditor';
+    requesterAdminId: string;
+  }): Promise<{ profile: Profile; role: UserRole }> {
+    const requesterRole = await this.getUserRole(input.requesterAdminId);
+    if (requesterRole !== 'administrator') {
+      throw new Error('Unauthorized: Only administrators can provision management accounts.');
+    }
+
+    const userId = `p-adm-${Date.now()}`;
+    const newProfile: Profile = {
+      id: userId,
+      auth_user_id: `auth-${Date.now()}`,
+      full_name: input.fullName,
+      email: input.email.trim().toLowerCase(),
+      office_id: input.officeId,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    store.profiles.push(newProfile);
+    store.userRoles.push({ userId, role: input.role });
+
+    store.auditEvents.push({
+      id: `audit-${Date.now()}`,
+      actor_id: input.requesterAdminId,
+      action: 'ADMIN_PROVISIONED',
+      entity_type: 'USER',
+      entity_id: userId,
+      before_data: null,
+      after_data: { email: input.email, role: input.role },
+      created_at: new Date().toISOString(),
+    });
+
+    return { profile: newProfile, role: input.role };
   },
 
   async getTomCardForVehicle(vehicleId: string): Promise<TomCard | undefined> {
@@ -572,14 +651,9 @@ export const VLMSService = {
       }
     }
 
-    // 3. Role Management: Privileged Role Key Check
-    const assignedRole: UserRole = input.requestedRole || 'staff';
-    if (assignedRole !== 'staff') {
-      const validPasscode = process.env.ADMIN_REGISTRATION_PASSCODE || 'VLMS-ADMIN-2026';
-      if (!input.adminPasscode || input.adminPasscode.trim() !== validPasscode) {
-        throw new Error('Invalid administrative authorization key for privileged role registration.');
-      }
-    }
+    // 3. Role Management: Public Registration is strictly restricted to Staff
+    // Administrative and management roles can only be provisioned by authenticated Super-Admins
+    const assignedRole: UserRole = 'staff';
 
     const userId = `p-user-${Date.now()}`;
     const newProfile: Profile = {

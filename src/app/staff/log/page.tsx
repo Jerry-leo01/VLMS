@@ -12,6 +12,7 @@ import { VehicleAssignment, Profile, DailyLog, OdometerUnit } from '@/types/data
 import { getBusinessDate } from '@/lib/utils';
 import { Car, CheckCircle2, AlertCircle, ArrowLeft, Loader2, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 
 export default function DailyLogSubmissionPage() {
   const router = useRouter();
@@ -43,8 +44,19 @@ export default function DailyLogSubmissionPage() {
   useEffect(() => {
     async function init() {
       try {
-        const staff = await VLMSService.getStaffProfile('p-staff-01');
-        const asg = await VLMSService.getActiveAssignment('p-staff-01');
+        const supabase = createClient();
+        const { data: authData } = await supabase.auth.getUser();
+        let targetUserId = 'p-staff-01';
+
+        if (authData?.user) {
+          const matchedProfile = await VLMSService.getStaffProfileByAuthId(authData.user.id);
+          if (matchedProfile) {
+            targetUserId = matchedProfile.id;
+          }
+        }
+
+        const staff = await VLMSService.getStaffProfile(targetUserId);
+        const asg = await VLMSService.getActiveAssignment(targetUserId);
         if (staff) setProfile(staff);
         if (asg) {
           setAssignment(asg);
@@ -82,6 +94,13 @@ export default function DailyLogSubmissionPage() {
     setRawOdometerText(data.rawOdometerText);
     setOcrReadingKm(data.ocrReadingKm);
     setOcrConfidence(data.ocrConfidence);
+
+    setTimeout(() => {
+      const step3 = document.getElementById('step-gps');
+      if (step3) {
+        step3.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 150);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -117,7 +136,7 @@ export default function DailyLogSubmissionPage() {
       // 2. Submit daily log
       const { log } = await VLMSService.submitDailyLog({
         vehicleId: assignment.vehicle_id,
-        userId: 'p-staff-01',
+        userId: profile?.id ?? 'p-staff-01',
         odometerKm: confirmedKm,
         rawOdometerText,
         sourceUnit,
@@ -271,7 +290,7 @@ export default function DailyLogSubmissionPage() {
               )}
 
               {/* Step 3: Location Verification */}
-              <div className="space-y-2">
+              <div id="step-gps" className="space-y-2 scroll-mt-20">
                 <div className="flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-navy-900 text-white text-xs font-bold flex items-center justify-center">3</span>
                   <h3 className="text-sm font-bold text-slate-900">GPS Location Stamp</h3>
