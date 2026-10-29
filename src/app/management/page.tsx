@@ -25,7 +25,9 @@ import {
   ShieldCheck,
   Hash,
   X,
+  KeyRound,
 } from 'lucide-react';
+import { AdminTotpGeneratorModal } from '@/components/admin/AdminTotpGeneratorModal';
 
 export default function ManagementDashboardPage() {
   const [metrics, setMetrics] = useState({
@@ -47,6 +49,7 @@ export default function ManagementDashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceGalleryItem | null>(null);
+  const [showPinModal, setShowPinModal] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -108,6 +111,14 @@ export default function ManagementDashboardPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowPinModal(true)}
+                className="py-2 px-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold shadow-sm flex items-center gap-2 transition-colors"
+              >
+                <KeyRound className="w-4 h-4 text-blue-200" />
+                <span>Admin Onboarding PIN (60s)</span>
+              </button>
               <Link
                 href="/management/reports"
                 className="py-2 px-3.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50 shadow-sm flex items-center gap-2"
@@ -498,6 +509,12 @@ export default function ManagementDashboardPage() {
           </div>
         </div>
       )}
+
+      {/* TOTP 60-Second Setup PIN Modal */}
+      <AdminTotpGeneratorModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+      />
 
       <ManagementBottomNav />
     </div>

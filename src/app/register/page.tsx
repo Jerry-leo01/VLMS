@@ -10,10 +10,15 @@ import {
   AlertCircle,
   BookOpen,
   UserPlus,
+  KeyRound,
+  Lock,
+  ArrowRight,
+  Clock,
 } from 'lucide-react';
 import { normalizePlateNumber } from '@/lib/utils';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { verifyAdminTotpPin } from '@/lib/security/admin-totp';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -37,9 +42,30 @@ export default function RegisterPage() {
     'administrator'
   );
 
+  // Time-Based 60-Second Administrator Access Setup PIN Gate
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const [grantToken, setGrantToken] = useState<string | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const handleVerifyAdminPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPinError(null);
+
+    const result = verifyAdminTotpPin(pinInput);
+    if (!result.success) {
+      setPinError(result.error || 'Invalid or expired PIN. Please try again.');
+      return;
+    }
+
+    setAdminUnlocked(true);
+    setGrantToken(result.grantToken || null);
+    setPinError(null);
+  };
 
   const exactOffices = [
     { id: '11111111-1111-1111-1111-111111111111', name: 'Head Office' },
@@ -472,25 +498,108 @@ export default function RegisterPage() {
                     </button>
                   </form>
                 </>
-              ) : (
-                <>
-                  {/* Step-by-Step Admin Registration & Access Guide */}
-                  <div className="p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl space-y-2 text-xs">
-                    <div className="flex items-center gap-2 font-bold text-navy-900 dark:text-blue-300">
-                      <BookOpen className="w-4 h-4 text-blue-600 shrink-0" />
-                      <span>How Administrators Register & Gain Access</span>
+              ) : !adminUnlocked ? (
+                /* Step 1: 60-Second Administrator Access Setup Challenge Gate */
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div className="p-4 sm:p-5 bg-gradient-to-br from-navy-950 to-slate-900 text-white rounded-2xl shadow-md space-y-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300">
+                        <KeyRound className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm sm:text-base font-bold">
+                          Administrator Access Setup Verification
+                        </h3>
+                        <span className="text-[11px] text-slate-300 block">
+                          Out-of-band dual-control governance protocol
+                        </span>
+                      </div>
                     </div>
-                    <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed">
-                      <li>
-                        <strong>Complete Management Profile:</strong> Provide your full name, corporate email address, phone number, and branch office below.
-                      </li>
-                      <li>
-                        <strong>Assign Administrative Role:</strong> Select <em>Administrator</em>, <em>Fleet Manager</em>, or <em>Auditor</em>.
-                      </li>
-                      <li>
-                        <strong>Direct Module Redirect:</strong> Submitting this form provisions your active management profile, records an immutable audit event, and signs you directly into the Admin Module (<code className="font-mono">/management</code>).
-                      </li>
-                    </ol>
+                    <p className="text-xs text-slate-300 leading-relaxed pt-1">
+                      To prevent unauthorized self-provisioning, administrative access setup requires a temporary, <strong>60-second rotating PIN</strong> generated directly inside the <strong>Administrator Dashboard</strong>.
+                    </p>
+                  </div>
+
+                  <form onSubmit={handleVerifyAdminPin} className="space-y-4">
+                    <div className="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 sm:p-5 space-y-3">
+                      <div>
+                        <label
+                          htmlFor="adminPinInput"
+                          className="block text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200"
+                        >
+                          6-Digit Authorization PIN <span className="text-red-500">*</span>
+                        </label>
+                        <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          Request an active fleet administrator to click &ldquo;Admin Onboarding PIN&rdquo; on their dashboard.
+                        </span>
+                        <div className="mt-2 relative">
+                          <input
+                            id="adminPinInput"
+                            type="text"
+                            inputMode="numeric"
+                            autoComplete="one-time-code"
+                            pattern="[0-9]*"
+                            maxLength={6}
+                            required
+                            autoFocus
+                            value={pinInput}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '').slice(0, 6);
+                              setPinInput(val);
+                              if (pinError) setPinError(null);
+                            }}
+                            className="w-full px-4 py-3 bg-white dark:bg-slate-900 border-2 border-slate-300 dark:border-slate-600 rounded-xl font-mono text-2xl sm:text-3xl font-extrabold tracking-widest text-center text-navy-950 dark:text-blue-400 focus:border-navy-900 dark:focus:border-blue-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Each authorization PIN is strictly valid for <strong>60 seconds</strong>.</span>
+                      </div>
+
+                      {pinError && (
+                        <div className="p-3 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-800 dark:text-red-300 flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600" />
+                          <span>{pinError}</span>
+                        </div>
+                      )}
+
+                      <button
+                        type="submit"
+                        disabled={pinInput.length !== 6}
+                        className="w-full py-3 px-4 bg-navy-950 hover:bg-navy-900 disabled:opacity-50 dark:bg-blue-600 dark:hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-sm transition-colors"
+                      >
+                        <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                        <span>Verify & Unlock Setup Form</span>
+                      </button>
+                    </div>
+
+                    <div className="text-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRegMode('staff');
+                          setPinError(null);
+                        }}
+                        className="text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 transition-colors"
+                      >
+                        ← Return to Staff Vehicle Registration
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ) : (
+                /* Step 2: Unlocked Administrator Setup Form */
+                <>
+                  <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900 rounded-xl flex items-center gap-2.5 text-xs text-emerald-900 dark:text-emerald-200">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <div>
+                      <strong>Access Authorized by Active Administrator</strong>
+                      <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
+                        One-time authorization token validated. Complete your administrative profile below.
+                      </p>
+                    </div>
                   </div>
 
                   <form onSubmit={handleAdminSubmit} className="space-y-4">
