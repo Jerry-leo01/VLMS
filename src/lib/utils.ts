@@ -103,6 +103,142 @@ export function formatDateTime(isoString: string | null | undefined, timezone: s
 }
 
 /**
+ * Recursively converts arbitrary JSON objects/payloads into clear, human-readable natural text
+ */
+export function formatJsonToHumanText(data: unknown): string {
+  if (data === null || data === undefined) return '';
+  if (typeof data !== 'object') return String(data);
+
+  if (Array.isArray(data)) {
+    if (data.length === 0) return 'None';
+    return data.map((item) => formatJsonToHumanText(item)).join(', ');
+  }
+
+  const entries = Object.entries(data as Record<string, unknown>);
+  if (entries.length === 0) return '';
+
+  return entries
+    .map(([key, val]) => {
+      // Convert snake_case or camelCase into Title Case label
+      const label = key
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/_/g, ' ')
+        .replace(/^\w/, (c) => c.toUpperCase())
+        .trim();
+
+      if (val === null || val === undefined || val === '') {
+        return `${label}: None`;
+      }
+      if (typeof val === 'boolean') {
+        return `${label}: ${val ? 'Yes' : 'No'}`;
+      }
+      if (typeof val === 'number') {
+        if (/amount|cost|price|rate/i.test(key)) return `${label}: ${formatCurrency(val)}`;
+        if (/km|distance|odometer|reading/i.test(key)) return `${label}: ${formatOdometer(val)}`;
+        return `${label}: ${val.toLocaleString()}`;
+      }
+      if (typeof val === 'object') {
+        const nested = formatJsonToHumanText(val);
+        return nested ? `${label} (${nested})` : label;
+      }
+      return `${label}: ${String(val)}`;
+    })
+    .join(' • ');
+}
+
+/**
+ * Formats Evidence metadata JSON into clear, categorized human-readable inspection fields
+ */
+export function formatEvidenceMetadata(
+  metadata?: Record<string, unknown> | null
+): Array<{ label: string; value: string }> {
+  if (!metadata || Object.keys(metadata).length === 0) {
+    return [{ label: 'Telemetry Details', value: 'Standard verification telemetry recorded' }];
+  }
+
+  const items: Array<{ label: string; value: string }> = [];
+
+  if (metadata.reading !== undefined && metadata.reading !== null) {
+    items.push({
+      label: 'Confirmed Reading',
+      value: formatOdometer(Number(metadata.reading)),
+    });
+  }
+  if (metadata.sourceReading !== undefined && metadata.sourceReading !== null) {
+    const unit = String(metadata.sourceUnit || 'km').toUpperCase();
+    items.push({
+      label: 'Dashboard Reading',
+      value: `${Number(metadata.sourceReading).toLocaleString()} ${unit}`,
+    });
+  }
+  if (metadata.sourceUnit) {
+    items.push({
+      label: 'Measurement Unit',
+      value: metadata.sourceUnit === 'mi' ? 'Miles (Imperial)' : 'Kilometers (Metric)',
+    });
+  }
+  if (metadata.ocrProposal !== undefined && metadata.ocrProposal !== null) {
+    items.push({
+      label: 'OCR Suggested Value',
+      value: formatOdometer(Number(metadata.ocrProposal)),
+    });
+  }
+  if (metadata.vendor) {
+    items.push({
+      label: 'Filling Station / Vendor',
+      value: String(metadata.vendor),
+    });
+  }
+  if (metadata.amount !== undefined && metadata.amount !== null) {
+    items.push({
+      label: 'Receipt Transaction Amount',
+      value: formatCurrency(Number(metadata.amount)),
+    });
+  }
+  if (metadata.quantityLitres !== undefined && metadata.quantityLitres !== null) {
+    items.push({
+      label: 'Fuel Volume',
+      value: `${Number(metadata.quantityLitres).toLocaleString()} Litres`,
+    });
+  }
+  if (metadata.transactionDateTime) {
+    items.push({
+      label: 'Transaction Time',
+      value: String(metadata.transactionDateTime),
+    });
+  }
+  if (metadata.ocrConfidence !== undefined && metadata.ocrConfidence !== null) {
+    items.push({
+      label: 'OCR Optical Confidence',
+      value: `${Number(metadata.ocrConfidence)}%`,
+    });
+  }
+
+  // Any remaining custom fields converted into readable labels
+  const handledKeys = new Set([
+    'reading',
+    'sourceReading',
+    'sourceUnit',
+    'ocrProposal',
+    'vendor',
+    'amount',
+    'quantityLitres',
+    'transactionDateTime',
+    'ocrConfidence',
+  ]);
+  Object.entries(metadata).forEach(([k, v]) => {
+    if (!handledKeys.has(k) && v !== null && v !== undefined && v !== '') {
+      const label = k.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      items.push({ label, value: typeof v === 'object' ? formatJsonToHumanText(v) : String(v) });
+    }
+  });
+
+  return items.length > 0
+    ? items
+    : [{ label: 'Telemetry Details', value: 'Standard verification telemetry recorded' }];
+}
+
+/**
  * Formats an audit event record into clear, human-readable plain text
  */
 export function formatAuditActionText(
@@ -112,7 +248,7 @@ export function formatAuditActionText(
   beforeData?: Record<string, unknown> | null
 ): string {
   if (!afterData && !beforeData) {
-    return `${action.replace(/_/g, ' ')} on ${entityType}`;
+    return `${action.replace(/_/g, ' ')} on ${entityType}.`;
   }
 
   const d = afterData || {};
@@ -125,7 +261,7 @@ export function formatAuditActionText(
     case 'FUEL_TRANSACTION_SUBMITTED':
       return `Recorded fuel purchase of ${d.quantity_litres || 0} L (${formatCurrency(
         Number(d.amount || 0)
-      )}) via ${(String(d.payment_method || '')).replace(/_/g, ' ')}.`;
+      )}) via ${String(d.payment_method || '').replace(/_/g, ' ')}.`;
     case 'REGISTRATION_SUBMITTED':
       return `Registration request submitted by ${d.fullName || 'User'} for car ${
         d.carName ? `${d.carName} ` : ''
@@ -138,10 +274,18 @@ export function formatAuditActionText(
       return `Anomaly alert updated to status "${d.status || 'Resolved'}". Note: ${
         d.resolution_note || 'Reviewed'
       }`;
+    case 'ADMIN_PROVISIONED':
+      return `New management account provisioned for ${d.email || 'administrator'} (Assigned Role: ${String(
+        d.role || 'Administrator'
+      ).replace(/_/g, ' ')}).`;
     case 'SYSTEM_INITIALIZED':
       return `System initial operational fleet baseline loaded.`;
-    default:
-      return `${action.replace(/_/g, ' ')} executed on ${entityType}.`;
+    default: {
+      const humanDetails = formatJsonToHumanText(d);
+      return humanDetails
+        ? `${action.replace(/_/g, ' ')} on ${entityType}: ${humanDetails}.`
+        : `${action.replace(/_/g, ' ')} executed on ${entityType}.`;
+    }
   }
 }
 

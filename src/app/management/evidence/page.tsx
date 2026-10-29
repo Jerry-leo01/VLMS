@@ -7,8 +7,8 @@ import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
 import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { DailyLog, FuelTransaction } from '@/types/database';
-import { formatDateTime, formatOdometer } from '@/lib/utils';
-import { Image as ImageIcon, ArrowLeft, ShieldCheck, Eye, Hash, X } from 'lucide-react';
+import { formatDateTime, formatOdometer, formatEvidenceMetadata } from '@/lib/utils';
+import { Image as ImageIcon, ArrowLeft, ShieldCheck, Eye, Hash, X, Sparkles } from 'lucide-react';
 
 export default function EvidenceGalleryPage() {
   const [logs, setLogs] = useState<DailyLog[]>([]);
@@ -19,6 +19,7 @@ export default function EvidenceGalleryPage() {
     hash: string;
     type: string;
     submittedAt: string;
+    metadata?: Record<string, unknown> | null;
   } | null>(null);
 
   useEffect(() => {
@@ -91,6 +92,7 @@ export default function EvidenceGalleryPage() {
                           hash: log.evidence?.sha256_hash ?? 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
                           type: 'Daily Odometer Photograph',
                           submittedAt: log.submitted_at,
+                          metadata: log.evidence?.metadata ?? null,
                         })
                       }
                       className="absolute inset-0 bg-navy-950/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-semibold gap-1.5 transition-opacity"
@@ -156,6 +158,21 @@ export default function EvidenceGalleryPage() {
                 <Hash className="w-3.5 h-3.5" /> SHA-256 Cryptographic Hash
               </div>
               <div className="text-slate-800 break-all text-[11px]">{selectedPhoto.hash}</div>
+            </div>
+
+            {/* Human-Readable Evidence Metadata Inspection Card */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                Evidence Telemetry Breakdown
+              </span>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                {formatEvidenceMetadata(selectedPhoto.metadata).map((item, idx) => (
+                  <div key={idx} className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                    <span className="text-slate-400 block text-[10px] font-semibold uppercase">{item.label}</span>
+                    <span className="font-semibold text-slate-900 text-xs">{item.value}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="text-[11px] text-slate-400 text-right">

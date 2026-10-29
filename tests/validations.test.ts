@@ -6,6 +6,8 @@ import {
   getBusinessDate,
   formatAuditActionText,
   formatAnomalyText,
+  formatJsonToHumanText,
+  formatEvidenceMetadata,
 } from '../src/lib/utils';
 import { RegistrationSchema, TomCardFuelSchema, PersonalFundFuelSchema } from '../src/lib/validations';
 
@@ -191,5 +193,31 @@ describe('Utility & Validation Tests', () => {
       difference: 50,
     });
     expect(descMismatch).toContain('Staff-confirmed reading (50,100 km) differs by 50 km from the camera OCR proposal (50,050 km).');
+  });
+
+  it('should convert arbitrary JSON payloads and evidence metadata into clean human-readable text', () => {
+    const rawJson = {
+      plateNumber: 'KJA-842XA',
+      odometerReading: 91308,
+      totalAmount: 38500,
+      isActive: true,
+    };
+    const humanText = formatJsonToHumanText(rawJson);
+    expect(humanText).toContain('Plate Number: KJA-842XA');
+    expect(humanText).toContain('Odometer Reading: 91,308 km');
+    expect(humanText).toContain('Total Amount: ₦38,500.00');
+    expect(humanText).toContain('Is Active: Yes');
+
+    const metadataFields = formatEvidenceMetadata({
+      reading: 91308,
+      sourceReading: 91308,
+      sourceUnit: 'mi',
+      ocrProposal: 91308,
+      vendor: 'TOTAL ENERGIES FILLING STATION',
+      amount: 45000,
+    });
+    expect(metadataFields.some((f) => f.label === 'Confirmed Reading' && f.value === '91,308 km')).toBe(true);
+    expect(metadataFields.some((f) => f.label === 'Measurement Unit' && f.value === 'Miles (Imperial)')).toBe(true);
+    expect(metadataFields.some((f) => f.label === 'Filling Station / Vendor' && f.value.includes('TOTAL ENERGIES'))).toBe(true);
   });
 });
