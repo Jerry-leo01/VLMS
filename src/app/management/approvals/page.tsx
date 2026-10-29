@@ -35,7 +35,8 @@ export default function ApprovalsQueuePage() {
   const handleApprove = async (requestId: string) => {
     setActionInProgress(requestId);
     try {
-      await VLMSService.approveRegistration(requestId, 'p-admin-01');
+      const adminProfile = await VLMSService.getCurrentAdminProfile();
+      await VLMSService.approveRegistration(requestId, adminProfile?.id ?? 'admin-system');
       await loadRequests();
     } catch (err) {
       alert((err as Error).message);
@@ -49,7 +50,12 @@ export default function ApprovalsQueuePage() {
     if (!rejectionModalId) return;
     setActionInProgress(rejectionModalId);
     try {
-      await VLMSService.rejectRegistration(rejectionModalId, 'p-admin-01', rejectionReason);
+      const adminProfile = await VLMSService.getCurrentAdminProfile();
+      await VLMSService.rejectRegistration(
+        rejectionModalId,
+        adminProfile?.id ?? 'admin-system',
+        rejectionReason
+      );
       setRejectionModalId(null);
       setRejectionReason('');
       await loadRequests();
@@ -65,7 +71,7 @@ export default function ApprovalsQueuePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <Navbar userRole="administrator" userName="Babajide Adeleke (Admin)" />
+      <Navbar userRole="administrator" />
 
       <div className="flex-1 flex">
         <ManagementSidebar />
@@ -208,14 +214,21 @@ export default function ApprovalsQueuePage() {
               This reason will be stored in the audit trail and presented to the applicant.
             </p>
             <form onSubmit={handleReject} className="space-y-4">
-              <textarea
-                required
-                rows={3}
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
-                placeholder="e.g. Vehicle plate is already assigned to another active staff member in Lagos HQ."
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
-              />
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-1">
+                  Detailed Rejection Explanation <span className="text-red-500">*</span>
+                </label>
+                <span className="block text-[11px] text-slate-500 mb-1.5">
+                  State why the registration or plate assignment cannot be approved
+                </span>
+                <textarea
+                  required
+                  rows={3}
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                />
+              </div>
               <div className="flex gap-2">
                 <button
                   type="submit"

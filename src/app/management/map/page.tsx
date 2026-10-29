@@ -57,7 +57,7 @@ export default function FleetMapPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <Navbar userRole="administrator" userName="Babajide Adeleke (Admin)" />
+      <Navbar userRole="administrator" />
 
       <div className="flex-1 flex">
         <ManagementSidebar />
@@ -150,15 +150,19 @@ export default function FleetMapPage() {
                   </span>
                 </div>
 
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search plate or staff..."
-                    className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-navy-900"
-                  />
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Filter by Plate or Staff
+                  </label>
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-2 text-slate-400" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-navy-900"
+                    />
+                  </div>
                 </div>
 
                 <div className="divide-y divide-slate-100 max-h-[460px] overflow-y-auto space-y-1">

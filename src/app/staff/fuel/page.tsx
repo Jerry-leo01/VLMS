@@ -4,27 +4,44 @@ import React, { useState, useEffect } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { CameraCapture } from '@/components/camera/CameraCapture';
-import { OcrConfirmation } from '@/components/ocr/OcrConfirmation';
 import { ReceiptConfirmation } from '@/components/ocr/ReceiptConfirmation';
 import { VLMSService } from '@/lib/services/vlms-service';
-import { VehicleAssignment, Profile, DailyLog, TomCard, FuelTransaction } from '@/types/database';
+import {
+  VehicleAssignment,
+  Profile,
+  DailyLog,
+  TomCard,
+  FuelTransaction,
+} from '@/types/database';
 import { formatCurrency, formatOdometer, getBusinessDate } from '@/lib/utils';
 import { processReceiptImage, ReceiptOcrResult } from '@/lib/ocr/processor';
 import { createClient } from '@/lib/supabase/client';
 import {
-  Fuel,
   CreditCard,
   Wallet,
   CheckCircle2,
   AlertCircle,
   ArrowLeft,
   Loader2,
-  Camera,
   Receipt,
   FileCheck,
-  Sparkles,
+  Clock,
 } from 'lucide-react';
 import Link from 'next/link';
+
+function formatLocalDateTimeInput(date: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
+function formatReadableTimestamp(date: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
 
 export default function FuelPurchasePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -32,6 +49,14 @@ export default function FuelPurchasePage() {
   const [tomCard, setTomCard] = useState<TomCard | null>(null);
   const [todayLog, setTodayLog] = useState<DailyLog | null>(null);
   const [latestKm, setLatestKm] = useState<number | null>(null);
+
+  // Real-Time Automated Transaction Timestamp State
+  const [transactionDateTime, setTransactionDateTime] = useState<string>(() =>
+    formatLocalDateTimeInput(new Date())
+  );
+  const [liveDisplayClock, setLiveDisplayClock] = useState<string>(() =>
+    formatReadableTimestamp(new Date())
+  );
 
   // Form State
   const [paymentMethod, setPaymentMethod] = useState<'tom_card' | 'personal_fund'>('tom_card');
@@ -55,30 +80,53 @@ export default function FuelPurchasePage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [completedTx, setCompletedTx] = useState<FuelTransaction | null>(null);
 
+  // Live real-time timestamp automation at moment of usage
+  useEffect(() => {
+    const now = new Date();
+    setTransactionDateTime(formatLocalDateTimeInput(now));
+    setLiveDisplayClock(formatReadableTimestamp(now));
+
+    const timer = setInterval(() => {
+      const current = new Date();
+      setLiveDisplayClock(formatReadableTimestamp(current));
+      setTransactionDateTime(formatLocalDateTimeInput(current));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     async function loadData() {
       try {
         const supabase = createClient();
         const { data: authData } = await supabase.auth.getUser();
-        let targetUserId = 'p-staff-01';
+
+        let resolvedProfile: Profile | null = null;
+        let resolvedAsg: VehicleAssignment | null = null;
 
         if (authData?.user) {
-          const matchedProfile = await VLMSService.getStaffProfileByAuthId(authData.user.id);
-          if (matchedProfile) {
-            targetUserId = matchedProfile.id;
+          const matched = await VLMSService.getStaffProfileByAuthId(authData.user.id);
+          if (matched) {
+            resolvedProfile = matched;
+            const asg = await VLMSService.getActiveAssignment(matched.id);
+            if (asg) resolvedAsg = asg;
           }
         }
 
-        const staff = await VLMSService.getStaffProfile(targetUserId);
-        const asg = await VLMSService.getActiveAssignment(targetUserId);
-        if (staff) setProfile(staff);
-        if (asg) {
-          setAssignment(asg);
-          const card = await VLMSService.getTomCardForVehicle(asg.vehicle_id);
+        if (!resolvedProfile && !resolvedAsg) {
+          const ctx = await VLMSService.getCurrentStaffContext();
+          resolvedProfile = ctx.profile;
+          resolvedAsg = ctx.assignment;
+        }
+
+        if (resolvedProfile) setProfile(resolvedProfile);
+        if (resolvedAsg) {
+          setAssignment(resolvedAsg);
+          const card = await VLMSService.getTomCardForVehicle(resolvedAsg.vehicle_id);
           if (card) setTomCard(card);
 
           // Strictly verify odometer against the daily log created by staff on the SAME DAY
-          const log = await VLMSService.getTodayLog(asg.vehicle_id);
+          const log = await VLMSService.getTodayLog(resolvedAsg.vehicle_id);
           if (log && log.business_date === getBusinessDate()) {
             setTodayLog(log);
             setLatestKm(log.odometer_km);
@@ -129,7 +177,7 @@ export default function FuelPurchasePage() {
     setVendorName(verified.fillingStation);
     setAmount(verified.amount.toString());
     setLitres(verified.quantityLitres.toString());
-    setReceiptDateTime(verified.transactionDateTime);
+    setReceiptDateTime(verified.transactionDateTime || liveDisplayClock);
     setReceiptConfirmed(true);
   };
 
@@ -143,7 +191,12 @@ export default function FuelPurchasePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assignment) return;
+    if (!assignment) {
+      setErrorMessage(
+        'No active vehicle assignment found for your account. Please register your vehicle first.'
+      );
+      return;
+    }
     setErrorMessage(null);
 
     // Strict validation: must have verified today's daily log
@@ -180,7 +233,9 @@ export default function FuelPurchasePage() {
 
     if (paymentMethod === 'personal_fund') {
       if (!receiptPhoto) {
-        setErrorMessage('A photograph of the fuel receipt is mandatory for personal-fund purchases.');
+        setErrorMessage(
+          'A photograph of the fuel receipt is mandatory for personal-fund purchases.'
+        );
         return;
       }
       if (!receiptConfirmed) {
@@ -206,48 +261,57 @@ export default function FuelPurchasePage() {
           evidenceType: 'fuel_odometer',
           sha256Hash: newOdometerHash || `hash-${Date.now()}`,
           mimeType: 'image/jpeg',
-          fileSizeBytes: 390000,
+          fileSizeBytes: newOdometerPhoto ? Math.round(newOdometerPhoto.length * 0.75) : 390000,
+          dataUrl: newOdometerPhoto,
           metadata: { reading: parsedKm },
         });
         odometerEvidenceId = ev.id;
       }
 
-      // 2. Resolve Receipt Evidence ID
-      let receiptEvidenceId = odometerEvidenceId; // default fallback for tom card
-      if (paymentMethod === 'personal_fund' && receiptHash) {
+      // 2. Resolve Receipt Evidence ID (persisting receiptPhoto dataUrl)
+      let receiptEvidenceId = odometerEvidenceId;
+      if (paymentMethod === 'personal_fund' && receiptHash && receiptPhoto) {
         const recEv = await VLMSService.saveEvidenceFile({
           evidenceType: 'fuel_receipt',
           sha256Hash: receiptHash,
           mimeType: 'image/jpeg',
-          fileSizeBytes: 280000,
+          fileSizeBytes: Math.round(receiptPhoto.length * 0.75),
+          dataUrl: receiptPhoto,
           metadata: {
             vendor: vendorName,
             amount: parsedAmount,
             quantityLitres: parsedLitres,
-            transactionDateTime: receiptDateTime,
+            transactionDateTime: receiptDateTime || liveDisplayClock,
             ocrConfidence: receiptOcr?.confidence ?? null,
           },
         });
         receiptEvidenceId = recEv.id;
       }
 
-      // 3. Submit transaction with unique idempotency key
-      const idempotencyKey = `idem-${assignment.vehicle_id}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      // 3. Submit transaction with unique idempotency key and real-time purchasedAt timestamp
+      const idempotencyKey = `idem-${assignment.vehicle_id}-${Date.now()}-${Math.random()
+        .toString(36)
+        .substring(7)}`;
+
+      const purchasedIso = transactionDateTime
+        ? new Date(transactionDateTime).toISOString()
+        : new Date().toISOString();
 
       const { transaction } = await VLMSService.submitFuelTransaction({
         vehicleId: assignment.vehicle_id,
-        userId: profile?.id ?? 'p-staff-01',
+        userId: profile?.id ?? assignment.user_id,
         dailyLogId: todayLog?.id ?? null,
         paymentMethod,
         tomCardId: paymentMethod === 'tom_card' ? tomCard?.id : null,
-        vendorName: paymentMethod === 'tom_card' ? 'TOTAL ENERGIES FILLING STATION' : vendorName,
+        vendorName:
+          paymentMethod === 'tom_card' ? 'TOTAL ENERGIES FILLING STATION' : vendorName,
         odometerKm: parsedKm,
         odometerEvidenceId,
         receiptEvidenceId,
         amount: parsedAmount,
         currency: 'NGN',
         quantityLitres: parsedLitres,
-        purchasedAt: new Date().toISOString(),
+        purchasedAt: purchasedIso,
         idempotencyKey,
       });
 
@@ -264,23 +328,35 @@ export default function FuelPurchasePage() {
     <div className="min-h-screen bg-slate-50 flex flex-col pb-24 md:pb-8">
       <Navbar
         userRole="staff"
-        userName={profile?.full_name ?? 'Chukwuma Eze'}
-        vehiclePlate={assignment?.vehicle?.plate_number ?? 'KJA-842XA'}
+        userName={profile?.full_name}
+        vehiclePlate={assignment?.vehicle?.plate_number}
       />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 w-full py-6 space-y-6 flex-1">
-        <div className="flex items-center gap-2">
-          <Link
-            href="/staff"
-            className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 shadow-sm"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Record Fuel Purchase</h1>
-            <p className="text-xs text-slate-500">
-              Vehicle: <span className="font-mono font-semibold">{assignment?.vehicle?.plate_number}</span> • Date: {getBusinessDate()}
-            </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Link
+              href="/staff"
+              className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 shadow-sm"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">Record Fuel Purchase</h1>
+              <p className="text-xs text-slate-500">
+                Vehicle:{' '}
+                <span className="font-mono font-semibold">
+                  {assignment?.vehicle?.plate_number ?? 'Unassigned'}
+                </span>{' '}
+                • Business Date: {getBusinessDate()}
+              </p>
+            </div>
+          </div>
+
+          {/* Live Automated Real-Time Timestamp Badge */}
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-mono font-semibold self-start sm:self-auto">
+            <Clock className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+            <span>Live Timestamp: {liveDisplayClock}</span>
           </div>
         </div>
 
@@ -292,15 +368,38 @@ export default function FuelPurchasePage() {
             <h2 className="text-xl font-bold text-slate-900">Fuel Purchase Recorded</h2>
             <p className="text-xs text-slate-600 leading-relaxed max-w-md mx-auto">
               Successfully recorded fuel transaction of{' '}
-              <strong className="text-navy-950 font-bold">{formatCurrency(completedTx.amount)}</strong> ({completedTx.quantity_litres} Litres) at{' '}
+              <strong className="text-navy-950 font-bold">
+                {formatCurrency(completedTx.amount)}
+              </strong>{' '}
+              ({completedTx.quantity_litres} Litres) at{' '}
               <strong className="text-navy-950">{completedTx.vendor_name}</strong>.
             </p>
 
             <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl max-w-sm mx-auto text-left text-xs space-y-1.5 font-mono">
-              <div>Transaction ID: <span className="text-slate-800 font-semibold">{completedTx.id}</span></div>
-              <div>Method: <span className="uppercase font-semibold">{completedTx.payment_method.replace('_', ' ')}</span></div>
-              <div>Odometer: <span className="text-slate-800 font-semibold">{formatOdometer(completedTx.odometer_km)}</span></div>
-              <div>Status: <span className="uppercase text-emerald-700 font-bold">{completedTx.status}</span></div>
+              <div>
+                Transaction ID:{' '}
+                <span className="text-slate-800 font-semibold">{completedTx.id}</span>
+              </div>
+              <div>
+                Method:{' '}
+                <span className="uppercase font-semibold">
+                  {completedTx.payment_method.replace('_', ' ')}
+                </span>
+              </div>
+              <div>
+                Odometer:{' '}
+                <span className="text-slate-800 font-semibold">
+                  {formatOdometer(completedTx.odometer_km)}
+                </span>
+              </div>
+              <div>
+                Timestamp:{' '}
+                <span className="text-slate-800 font-semibold">{liveDisplayClock}</span>
+              </div>
+              <div>
+                Status:{' '}
+                <span className="uppercase text-emerald-700 font-bold">{completedTx.status}</span>
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 pt-3 max-w-sm mx-auto">
@@ -353,9 +452,35 @@ export default function FuelPurchasePage() {
               </div>
             )}
 
+            {/* Automated Real-Time Date & Time of Transaction Section */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="txRealTimeDate"
+                  className="text-xs font-bold text-slate-900 flex items-center gap-1.5"
+                >
+                  <Clock className="w-4 h-4 text-navy-800" />
+                  Transaction Date & Time (Auto-Captured)
+                </label>
+                <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold uppercase">
+                  Real-Time Synced
+                </span>
+              </div>
+              <input
+                id="txRealTimeDate"
+                type="datetime-local"
+                value={transactionDateTime}
+                readOnly
+                className="w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 cursor-not-allowed"
+              />
+              <p className="text-[11px] text-slate-500">
+                Automatically populated with the exact date and time at the moment of usage ({liveDisplayClock}).
+              </p>
+            </div>
+
             {/* Payment Method Selector */}
             <div className="space-y-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
                 Select Fuel Payment Method
               </label>
               <div className="grid grid-cols-2 gap-3">
@@ -396,55 +521,69 @@ export default function FuelPurchasePage() {
                   <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                     <span className="text-xs font-semibold text-slate-700">Assigned TOM Number</span>
                     <span className="text-xs font-mono font-bold text-navy-900 bg-slate-100 px-2.5 py-0.5 rounded">
-                      {tomCard?.masked_card_number ?? '804689'}
+                      {tomCard?.masked_card_number ?? profile?.tom_card?.masked_card_number ?? 'Active Card'}
                     </span>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700">Vendor (Fixed)</label>
+                    <label className="block text-xs font-semibold text-slate-700">
+                      Filling Station Vendor (Fixed)
+                    </label>
                     <input
                       type="text"
                       disabled
                       value="TOTAL ENERGIES FILLING STATION"
                       className="mt-1 w-full px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 cursor-not-allowed"
                     />
-                    <span className="text-[11px] text-slate-400 mt-1 block">
+                    <span className="text-[11px] text-slate-500 mt-1 block">
                       TOM Card transactions are policy-restricted to TotalEnergies stations.
                     </span>
                   </div>
                 </div>
 
                 {/* Amount & Litres for TOM Card */}
-                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm grid grid-cols-2 gap-3">
+                <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700">
+                    <label
+                      htmlFor="tomAmount"
+                      className="block text-xs font-semibold text-slate-800"
+                    >
                       Total Amount (NGN ₦) <span className="text-red-500">*</span>
                     </label>
                     <input
+                      id="tomAmount"
                       type="number"
                       step="0.01"
                       min="1"
                       required
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      placeholder="e.g. 35000"
-                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
                     />
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Total fuel cost charged in Naira.
+                    </p>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700">
+                    <label
+                      htmlFor="tomLitres"
+                      className="block text-xs font-semibold text-slate-800"
+                    >
                       Fuel Quantity (Litres) <span className="text-red-500">*</span>
                     </label>
                     <input
+                      id="tomLitres"
                       type="number"
                       step="0.1"
                       min="0.1"
                       required
                       value={litres}
                       onChange={(e) => setLitres(e.target.value)}
-                      placeholder="e.g. 40.5"
-                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
                     />
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Total volume of fuel dispensed in Litres.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -461,7 +600,7 @@ export default function FuelPurchasePage() {
 
               <div className="space-y-2">
                 <span className="text-xs text-slate-700 block">
-                  Has the odometer reading changed since your daily log ({latestKm} KM)?
+                  Has the odometer reading changed since your daily log ({latestKm ?? 0} KM)?
                 </span>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -473,7 +612,7 @@ export default function FuelPurchasePage() {
                         : 'bg-slate-50 text-slate-700 border-slate-200'
                     }`}
                   >
-                    No, Still {latestKm} KM
+                    No, Still {latestKm ?? 0} KM
                   </button>
                   <button
                     type="button"
@@ -499,18 +638,24 @@ export default function FuelPurchasePage() {
               ) : (
                 <div className="space-y-3 pt-2">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700">
+                    <label
+                      htmlFor="newCurrentKm"
+                      className="block text-xs font-semibold text-slate-800"
+                    >
                       New Current Odometer (KM) <span className="text-red-500">*</span>
                     </label>
                     <input
+                      id="newCurrentKm"
                       type="number"
                       step="0.1"
                       required
                       value={currentKm}
                       onChange={(e) => setCurrentKm(e.target.value)}
-                      placeholder="e.g. 45280"
-                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-semibold"
+                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-semibold text-slate-900"
                     />
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Enter the updated odometer reading shown on the vehicle dashboard.
+                    </p>
                   </div>
 
                   <CameraCapture
@@ -538,7 +683,7 @@ export default function FuelPurchasePage() {
                 {!receiptPhoto ? (
                   <CameraCapture
                     title="Photograph Fuel Receipt"
-                    instruction="Capture the official receipt showing station name, amount paid, and date."
+                    instruction="Capture the official receipt showing filling station header name, amount paid, and litres."
                     captureType="receipt"
                     overlayText="Frame Fuel Receipt Clearly Here"
                     onCapture={handleReceiptCaptured}
@@ -546,9 +691,11 @@ export default function FuelPurchasePage() {
                 ) : isScanningReceipt ? (
                   <div className="p-6 bg-blue-50 border border-blue-200 rounded-2xl text-center space-y-2">
                     <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
-                    <p className="text-sm font-bold text-blue-900">Scanning & Extracting Receipt Data...</p>
+                    <p className="text-sm font-bold text-blue-900">
+                      Scanning & Extracting Receipt Header & Figures...
+                    </p>
                     <p className="text-xs text-blue-700">
-                      Detecting filling station marketer, date/time, total amount, and fuel volume...
+                      Identifying filling station name from receipt header, total amount, and fuel volume...
                     </p>
                   </div>
                 ) : receiptOcr && !receiptConfirmed ? (
@@ -571,7 +718,7 @@ export default function FuelPurchasePage() {
                             Receipt Verified & Data Populated
                           </span>
                           <span className="text-[11px] text-emerald-700">
-                            Station, date, amount, and litres verified from receipt evidence
+                            Filling station header, date/time, amount, and litres verified
                           </span>
                         </div>
                       </div>
@@ -586,16 +733,22 @@ export default function FuelPurchasePage() {
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-emerald-200/60 text-[11px]">
                       <div>
-                        <span className="text-slate-500 block">Station:</span>
-                        <span className="font-bold text-slate-900 truncate block">{vendorName || 'N/A'}</span>
+                        <span className="text-slate-500 block">Filling Station:</span>
+                        <span className="font-bold text-slate-900 truncate block">
+                          {vendorName || 'N/A'}
+                        </span>
                       </div>
                       <div>
                         <span className="text-slate-500 block">Date & Time:</span>
-                        <span className="font-bold text-slate-900 block">{receiptDateTime || 'N/A'}</span>
+                        <span className="font-bold text-slate-900 block">
+                          {receiptDateTime || liveDisplayClock}
+                        </span>
                       </div>
                       <div>
                         <span className="text-slate-500 block">Quantity:</span>
-                        <span className="font-bold text-slate-900 block">{litres ? `${litres} L` : 'N/A'}</span>
+                        <span className="font-bold text-slate-900 block">
+                          {litres ? `${litres} L` : 'N/A'}
+                        </span>
                       </div>
                       <div>
                         <span className="text-slate-500 block">Total:</span>

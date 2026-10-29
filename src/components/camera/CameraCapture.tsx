@@ -113,19 +113,14 @@ export function CameraCapture({
     }
   };
 
-  // Helper to extract Region of Interest (ROI) covering the full cluster & lower LCD display area
+  // Helper to extract Region of Interest (ROI) covering both upper-center and lower LCD odometer windows
   const extractRoiCrop = (sourceCanvas: HTMLCanvasElement): string | null => {
     try {
       const roiCanvas = document.createElement('canvas');
-      // Capture expansive 88% width and 65% height covering both central dials and lower LCD digital readouts
-      const roiWidth = Math.round(sourceCanvas.width * 0.88);
-      const roiHeight = Math.round(sourceCanvas.height * 0.65);
+      const roiWidth = Math.round(sourceCanvas.width * 0.92);
+      const roiHeight = Math.round(sourceCanvas.height * 0.84);
       const roiX = Math.round((sourceCanvas.width - roiWidth) / 2);
-      // Position from 25% down to lower cluster where digital LCD odometers reside
-      const roiY = Math.min(
-        Math.max(0, Math.round(sourceCanvas.height * 0.25)),
-        sourceCanvas.height - roiHeight
-      );
+      const roiY = Math.round((sourceCanvas.height - roiHeight) / 2);
 
       roiCanvas.width = roiWidth;
       roiCanvas.height = roiHeight;

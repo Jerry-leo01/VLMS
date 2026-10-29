@@ -129,12 +129,12 @@ export function OcrConfirmation({ imageSrc, roiImageSrc, onConfirmed }: OcrConfi
               <div className="relative rounded-lg overflow-hidden border border-slate-300 bg-black aspect-video flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={roiImageSrc || imageSrc}
+                  src={imageSrc}
                   alt="Captured odometer cluster"
                   className="max-h-full max-w-full object-contain"
                 />
                 <div className="absolute top-2 left-2 bg-black/70 text-white text-[10px] font-mono px-2 py-0.5 rounded">
-                  {roiImageSrc ? 'ROI View' : 'Full Frame'}
+                  Full Cluster View
                 </div>
               </div>
             </div>
@@ -208,13 +208,15 @@ export function OcrConfirmation({ imageSrc, roiImageSrc, onConfirmed }: OcrConfi
                 inputMode="decimal"
                 value={userReadingInput}
                 onChange={handleInputChange}
-                placeholder={sourceUnit === 'mi' ? 'e.g. 57612' : 'e.g. 92717'}
                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-lg text-lg font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800 focus:border-transparent transition-all"
               />
               <span className="absolute right-3 top-3 text-xs font-bold text-slate-400 uppercase">
                 {sourceUnit}
               </span>
             </div>
+            <p className="text-[11px] text-slate-500 font-medium">
+              Enter the exact numeric odometer reading displayed on the dashboard in {sourceUnit.toUpperCase()}.
+            </p>
             {sanitizedInput.endsWith('.') && (
               <p className="text-[11px] text-amber-600 font-medium">
                 Please complete typing the decimal value (e.g. {sanitizedInput}0) or remove the trailing period.

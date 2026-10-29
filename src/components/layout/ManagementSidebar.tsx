@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { VLMSService } from '@/lib/services/vlms-service';
 
 export const OPEN_SIDEBAR_EVENT = 'vlms:open-admin-sidebar';
 export const CLOSE_SIDEBAR_EVENT = 'vlms:close-admin-sidebar';
@@ -42,6 +43,19 @@ export function closeAdminSidebar() {
 export function ManagementSidebar() {
   const pathname = usePathname();
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [adminName, setAdminName] = useState('System Administrator');
+  const [adminRoleLabel, setAdminRoleLabel] = useState('Administrator');
+
+  useEffect(() => {
+    VLMSService.getCurrentAdminProfile().then((prof) => {
+      if (prof) {
+        setAdminName(prof.full_name);
+        if (prof.roles && prof.roles.length > 0) {
+          setAdminRoleLabel(prof.roles[0].replace('_', ' '));
+        }
+      }
+    });
+  }, []);
 
   useEffect(() => {
     const handleOpen = () => setMobileDrawerOpen(true);
@@ -153,14 +167,14 @@ export function ManagementSidebar() {
         {/* Bottom Profile / Quick Info Footer */}
         <div className="p-3 border-t border-slate-800/80 bg-slate-950/40 flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-navy-800 text-blue-400 flex items-center justify-center font-bold text-xs shrink-0">
-              AD
+            <div className="w-7 h-7 rounded-lg bg-navy-800 text-blue-400 flex items-center justify-center font-bold text-xs shrink-0 uppercase">
+              {adminName.slice(0, 2)}
             </div>
             <div className="min-w-0">
               <span className="text-white font-semibold truncate block text-[11px]">
-                Babajide Adeleke
+                {adminName}
               </span>
-              <span className="text-[10px] text-slate-400 block truncate">Administrator</span>
+              <span className="text-[10px] text-slate-400 block truncate capitalize">{adminRoleLabel}</span>
             </div>
           </div>
           <Link

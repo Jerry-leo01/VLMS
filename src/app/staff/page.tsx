@@ -29,8 +29,8 @@ export default function StaffDashboardPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const staffProfile = await VLMSService.getStaffProfile('p-staff-01');
-        const asg = await VLMSService.getActiveAssignment('p-staff-01');
+        const { profile: staffProfile, assignment: asg } =
+          await VLMSService.getCurrentStaffContext();
         if (staffProfile) setProfile(staffProfile);
         if (asg) {
           setAssignment(asg);
@@ -54,8 +54,8 @@ export default function StaffDashboardPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col pb-20 md:pb-8">
       <Navbar
         userRole="staff"
-        userName={profile?.full_name ?? 'Chukwuma Eze'}
-        vehiclePlate={assignment?.vehicle?.plate_number ?? 'KJA-842XA'}
+        userName={profile?.full_name}
+        vehiclePlate={assignment?.vehicle?.plate_number}
       />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 w-full py-6 space-y-6 flex-1 pb-24 md:pb-8">
@@ -66,17 +66,17 @@ export default function StaffDashboardPage() {
               Staff Vehicle Portal
             </span>
             <h1 className="text-2xl font-bold tracking-tight">
-              Welcome, {profile?.full_name ?? 'Chukwuma Eze'}
+              Welcome, {profile?.full_name ?? 'Assigned Driver'}
             </h1>
             <p className="text-xs text-slate-300">
-              {profile?.office?.name ?? 'Lagos Corporate HQ'} • Business Date: {getBusinessDate()}
+              {profile?.office?.name ?? 'Corporate Branch'} • Business Date: {getBusinessDate()}
             </p>
           </div>
 
           <div className="bg-white/10 backdrop-blur border border-white/20 rounded-xl px-4 py-2.5 text-center sm:text-right shrink-0">
             <span className="text-[11px] text-slate-300 block font-medium">Assigned Vehicle</span>
             <span className="text-lg font-mono font-bold text-white tracking-wide">
-              {assignment?.vehicle?.plate_number ?? 'KJA-842XA'}
+              {assignment?.vehicle?.plate_number ?? 'Unassigned'}
             </span>
             <span className="text-[10px] text-blue-200 block">
               {assignment?.vehicle?.make} {assignment?.vehicle?.model}

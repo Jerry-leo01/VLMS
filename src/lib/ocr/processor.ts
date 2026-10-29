@@ -50,11 +50,16 @@ export function extractDashboardTelemetry(
 }
 
 /**
- * Preprocesses an image to improve OCR accuracy on LCD/digital odometer clusters.
- * Uses an integral image adaptive thresholding algorithm (Sauvola-inspired local window mean)
- * that isolates dark LCD 7-segment crystals from backlit screens, immune to global cowl shadows and glare.
+ * Preprocesses an image to improve OCR accuracy on LCD/digital odometer clusters and thermal receipts.
+ * Supports explicit polarity modes:
+ * - 'standard': Dark digits/text on light backlit LCD or thermal receipt paper.
+ * - 'inverted': Bright glowing LED/OLED digits (green, cyan, amber, red, white) on dark dashboard backdrop.
+ * - 'auto': Automatically estimates backdrop polarity.
  */
-export async function preprocessImageForOcr(imageSource: string | Blob): Promise<string | Blob> {
+export async function preprocessImageForOcr(
+  imageSource: string | Blob,
+  polarityMode: 'auto' | 'standard' | 'inverted' = 'auto'
+): Promise<string | Blob> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return imageSource;
   }
@@ -76,17 +81,24 @@ export async function preprocessImageForOcr(imageSource: string | Blob): Promise
           const w = canvas.width;
           const h = canvas.height;
 
-          // 1. Grayscale luminance calculation & global backdrop polarity estimation
+          // 1. Luminance calculation
+          // For inverted mode (glowing colored LCDs like green/cyan 091308), max(R,G,B) preserves full LED intensity
           const luminances = new Float32Array(w * h);
           let globalLumSum = 0;
           for (let i = 0; i < data.length; i += 4) {
-            const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const lum =
+              polarityMode === 'inverted'
+                ? Math.max(r, g, b)
+                : 0.299 * r + 0.587 * g + 0.114 * b;
             luminances[i / 4] = lum;
-            globalLumSum += lum;
+            globalLumSum += 0.299 * r + 0.587 * g + 0.114 * b;
           }
           const globalAvgLum = globalLumSum / (w * h);
-          // Dark backdrop clusters (e.g. glowing LED/OLED green/teal digits on black dashboard)
-          const isDarkBackdrop = globalAvgLum < 105;
+          const useInverted =
+            polarityMode === 'inverted' || (polarityMode === 'auto' && globalAvgLum < 115);
 
           // 2. Compute integral image for O(1) local window mean calculation
           const integral = new Float64Array((w + 1) * (h + 1));
@@ -101,9 +113,9 @@ export async function preprocessImageForOcr(imageSource: string | Blob): Promise
             }
           }
 
-          // 3. Adaptive local thresholding with bi-directional display polarity handling
-          const radius = Math.max(8, Math.min(24, Math.floor(w / 35)));
-          const k = 0.88; // contrast factor for standard dark digits on backlit LCD
+          // 3. Adaptive local thresholding
+          const radius = Math.max(10, Math.min(28, Math.floor(w / 30)));
+          const k = 0.88;
 
           for (let y = 0; y < h; y++) {
             const y0 = Math.max(0, y - radius);
@@ -128,11 +140,11 @@ export async function preprocessImageForOcr(imageSource: string | Blob): Promise
 
               // Normalize to black digits (0) on white background (255) for optimal Tesseract accuracy
               let val: number;
-              if (isDarkBackdrop) {
-                // Inverted polarity: bright glowing digits on dark dashboard
-                val = lum > mean * 1.15 || lum > mean + 18 ? 0 : 255;
+              if (useInverted) {
+                // Bright glowing LCD/LED digits on dark cluster window
+                val = (lum > mean * 1.14 || lum > mean + 16) && lum > 55 ? 0 : 255;
               } else {
-                // Standard polarity: dark LCD digits on light/backlit screen
+                // Standard dark digits on light LCD or thermal paper
                 val = lum < mean * k ? 0 : 255;
               }
 
@@ -158,22 +170,26 @@ export async function preprocessImageForOcr(imageSource: string | Blob): Promise
 
 /**
  * Multi-Pass Odometer OCR Engine.
- * Evaluates high-resolution Region of Interest (Pass 1) and falls back to full-frame
- * analysis (Pass 2) if confidence is low, ensuring LCD numbers are never missed.
+ * Evaluates both Inverted Polarity (glowing LED/LCD digits like green 091308 on dark dashboard)
+ * and Standard Polarity (dark LCD segments on backlit screen) across full cluster and ROI,
+ * selecting the candidate with a valid 5-7 digit odometer reading and highest confidence.
  */
 export async function processOdometerImage(
   imageSource: string | Blob,
   roiSource?: string | Blob
 ): Promise<OcrResult> {
-  const evaluateSingle = async (src: string | Blob): Promise<OcrResult> => {
-    const preprocessed = await preprocessImageForOcr(src);
-    const result = await Tesseract.recognize(preprocessed, 'eng', {
-      logger: () => {}, // silent logger
+  const evaluatePass = async (
+    src: string | Blob,
+    polarity: 'auto' | 'standard' | 'inverted' | 'raw'
+  ): Promise<OcrResult> => {
+    const processed =
+      polarity === 'raw' ? src : await preprocessImageForOcr(src, polarity);
+    const result = await Tesseract.recognize(processed, 'eng', {
+      logger: () => {},
     });
 
     const rawText = result.data.text || '';
     const confidence = Math.round(result.data.confidence || 0);
-
     const details = extractOdometerDetails(rawText);
 
     return {
@@ -186,34 +202,64 @@ export async function processOdometerImage(
     };
   };
 
+  const scoreResult = (res: OcrResult): number => {
+    if (res.proposedReading === null) return -100 + (res.confidence || 0);
+    const digitsLen = Math.floor(res.proposedReading).toString().length;
+    let score = res.confidence || 0;
+    if (digitsLen >= 5 && digitsLen <= 6) score += 80;
+    else if (digitsLen === 4 || digitsLen === 7) score += 45;
+    return score;
+  };
+
   try {
-    // Multi-pass execution
-    if (roiSource) {
-      // Pass 1: Test ROI
-      const roiResult = await evaluateSingle(roiSource);
+    const candidates: OcrResult[] = [];
 
-      // If Pass 1 found a solid reading with high confidence (>= 50%), check if full frame indicates MPH
-      if (roiResult.proposedReading !== null && roiResult.confidence >= 50) {
-        if (roiResult.detectedUnit === 'km' && /\b(MPH|M\.P\.H|MILES)\b/i.test(roiResult.rawText)) {
-          roiResult.detectedUnit = 'mi';
-          roiResult.canonicalKm = toCanonicalKm(roiResult.proposedReading, 'mi');
-          roiResult.proposedKm = roiResult.canonicalKm;
-        }
-        return roiResult;
-      }
-
-      // Pass 2: Fallback to full frame because ROI was either clipped or had low confidence (<50%)
-      const fullResult = await evaluateSingle(imageSource);
-      if (fullResult.proposedReading !== null) {
-        return fullResult;
-      }
-
-      // Pick the highest confidence candidate between ROI and full frame
-      return (roiResult.confidence || 0) >= (fullResult.confidence || 0) ? roiResult : fullResult;
+    // Pass 1: Full Frame Inverted Polarity (for glowing green/cyan/amber/white digital LCDs on dark cluster, e.g. 091308)
+    const invertedFull = await evaluatePass(imageSource, 'inverted');
+    candidates.push(invertedFull);
+    if (
+      invertedFull.proposedReading !== null &&
+      invertedFull.proposedReading >= 1000 &&
+      invertedFull.confidence >= 60
+    ) {
+      return invertedFull;
     }
 
-    // Direct single source evaluation
-    return await evaluateSingle(imageSource);
+    // Pass 2: Full Frame Standard Polarity (dark digits on backlit LCD screen)
+    const standardFull = await evaluatePass(imageSource, 'standard');
+    candidates.push(standardFull);
+    if (
+      standardFull.proposedReading !== null &&
+      standardFull.proposedReading >= 1000 &&
+      standardFull.confidence >= 60
+    ) {
+      return standardFull;
+    }
+
+    // Pass 3: Raw Full Frame (unthresholded fallback)
+    const rawFull = await evaluatePass(imageSource, 'raw');
+    candidates.push(rawFull);
+
+    // Pass 4: Optional ROI Pass if provided
+    if (roiSource) {
+      const roiInverted = await evaluatePass(roiSource, 'inverted');
+      candidates.push(roiInverted);
+      const roiStandard = await evaluatePass(roiSource, 'standard');
+      candidates.push(roiStandard);
+    }
+
+    // Propagate unit detection if any pass detected MPH
+    const anyMph = candidates.some((c) => c.detectedUnit === 'mi');
+    candidates.sort((a, b) => scoreResult(b) - scoreResult(a));
+
+    const best = candidates[0];
+    if (anyMph && best.proposedReading !== null && best.detectedUnit !== 'mi') {
+      best.detectedUnit = 'mi';
+      best.canonicalKm = toCanonicalKm(best.proposedReading, 'mi');
+      best.proposedKm = best.canonicalKm;
+    }
+
+    return best;
   } catch (err) {
     console.error('OCR processing error:', err);
     return {
@@ -229,25 +275,53 @@ export async function processOdometerImage(
 
 /**
  * Extracts candidate fuel purchase data (Vendor/Station, Date/Time, Amount, Litres) from receipt image.
+ * Runs adaptive thermal paper preprocessing + raw image fallback to maximize header and figure extraction.
  */
 export async function processReceiptImage(imageSource: string | Blob): Promise<ReceiptOcrResult> {
   try {
-    const result = await Tesseract.recognize(imageSource, 'eng', {
+    // Pass 1: Preprocessed thermal receipt (local adaptive thresholding)
+    const preprocessed = await preprocessImageForOcr(imageSource, 'standard');
+    const res1 = await Tesseract.recognize(preprocessed, 'eng', {
       logger: () => {},
     });
+    const text1 = res1.data.text || '';
+    const conf1 = Math.round(res1.data.confidence || 0);
+    const parsed1 = extractReceiptData(text1);
 
-    const rawText = result.data.text || '';
-    const confidence = Math.round(result.data.confidence || 0);
+    // If Pass 1 extracted station, amount, and litres cleanly, return immediately
+    if (parsed1.fillingStation && parsed1.amount && parsed1.quantityLitres) {
+      return {
+        rawText: text1,
+        fillingStation: parsed1.fillingStation,
+        vendorName: parsed1.vendorName,
+        transactionDateTime: parsed1.transactionDateTime,
+        amount: parsed1.amount,
+        quantityLitres: parsed1.quantityLitres,
+        confidence: conf1,
+      };
+    }
 
-    const parsed = extractReceiptData(rawText);
+    // Pass 2: Raw image pass to recover any faint header logo or numbers
+    const res2 = await Tesseract.recognize(imageSource, 'eng', {
+      logger: () => {},
+    });
+    const text2 = res2.data.text || '';
+    const conf2 = Math.round(res2.data.confidence || 0);
+    const parsed2 = extractReceiptData(text2);
+
+    const mergedStation = parsed1.fillingStation || parsed2.fillingStation;
+    const mergedDateTime = parsed1.transactionDateTime || parsed2.transactionDateTime;
+    const mergedAmount = parsed1.amount ?? parsed2.amount;
+    const mergedLitres = parsed1.quantityLitres ?? parsed2.quantityLitres;
+
     return {
-      rawText,
-      fillingStation: parsed.fillingStation,
-      vendorName: parsed.vendorName,
-      transactionDateTime: parsed.transactionDateTime,
-      amount: parsed.amount,
-      quantityLitres: parsed.quantityLitres,
-      confidence,
+      rawText: text1.length >= text2.length ? text1 : text2,
+      fillingStation: mergedStation,
+      vendorName: mergedStation,
+      transactionDateTime: mergedDateTime,
+      amount: mergedAmount,
+      quantityLitres: mergedLitres,
+      confidence: Math.max(conf1, conf2),
     };
   } catch (err) {
     console.error('Receipt OCR processing error:', err);
@@ -272,8 +346,27 @@ export interface ParsedReceiptData {
 }
 
 /**
+ * Computes Levenshtein edit distance between two uppercase strings for fuzzy brand matching.
+ */
+function levenshteinDistance(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+    }
+  }
+  return dp[m][n];
+}
+
+/**
  * Parses raw text from a fuel purchase receipt.
- * Accurately extracts filling station name, date/time, total amount, and fuel litres.
+ * Specifically prioritizes capturing the "Filling Station Name" (header) from uploaded receipt images,
+ * along with date/time, total amount, and fuel litres.
  */
 export function extractReceiptData(text: string): ParsedReceiptData {
   if (!text) {
@@ -286,42 +379,207 @@ export function extractReceiptData(text: string): ParsedReceiptData {
     };
   }
 
-  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
   const upper = text.toUpperCase();
+  // Normalize common OCR digit-for-letter substitutions in header text
+  const normalizedAlphaUpper = upper
+    .replace(/0/g, 'O')
+    .replace(/1/g, 'I')
+    .replace(/5/g, 'S')
+    .replace(/8/g, 'B');
 
-  // 1. Detect Filling Station Name (exact and fuzzy brand dictionary matching)
+  // 1. Detect Filling Station Name (Header Extraction)
   let fillingStation: string | null = null;
-  const knownStations = [
-    { patterns: ['TOTAL ENERGIES', 'TOTALENERGIES', 'TOTAL FILLING', 'TOTAL PETROLEUM', 'TOTAL SERVICE', 'T0TAL ENERGIES', 'T0TALENERGIES'], standard: 'TOTAL ENERGIES FILLING STATION' },
-    { patterns: ['NNPC RETAIL', 'NNPC', 'NIGERIAN NATIONAL PETROLEUM', 'N.N.P.C'], standard: 'NNPC RETAIL' },
-    { patterns: ['MOBIL', '11 PLC', 'EXXONMOBIL', 'M0BIL'], standard: 'MOBIL SERVICE STATION' },
-    { patterns: ['OANDO', '0AND0'], standard: 'OANDO SERVICE STATION' },
-    { patterns: ['CONOIL', 'C0N0IL'], standard: 'CONOIL SERVICE STATION' },
-    { patterns: ['ARDOVA', 'AP FILLING', 'AFRICAN PETROLEUM'], standard: 'ARDOVA PLC (AP)' },
-    { patterns: ['BOVAS', 'B0VAS'], standard: 'BOVAS FILLING STATION' },
-    { patterns: ['MRS OIL', 'MRS FILLING', 'MRS SERVICE'], standard: 'MRS OIL SERVICE STATION' },
-    { patterns: ['NIPCO'], standard: 'NIPCO SERVICE STATION' },
-    { patterns: ['SHELL'], standard: 'SHELL SERVICE STATION' },
-    { patterns: ['RAINOIL'], standard: 'RAINOIL SERVICE STATION' },
-    { patterns: ['MATRIX ENERGY', 'MATRIX'], standard: 'MATRIX ENERGY' },
-    { patterns: ['NORTHWEST PETROLEUM', 'NORTHWEST'], standard: 'NORTHWEST PETROLEUM' },
-  ];
 
-  for (const station of knownStations) {
-    if (station.patterns.some((p) => upper.includes(p))) {
-      fillingStation = station.standard;
-      break;
+  // 1A. Explicit Labeled Station / Merchant Header (e.g. "STATION: ...", "MERCHANT NAME: ...")
+  for (const line of lines.slice(0, 10)) {
+    const labeledMatch = line.match(
+      /^(?:FILLING\s+STATION|SERVICE\s+STATION|STATION\s+NAME|MERCHANT\s+NAME|MERCHANT|DEALER|SOLD\s+BY)\s*:\s*(.{3,50})$/i
+    );
+    if (labeledMatch && labeledMatch[1]) {
+      const rawVal = labeledMatch[1].trim();
+      if (!rawVal.startsWith('#') && !/^\d/.test(rawVal)) {
+        const candidate = rawVal.replace(/[^A-Za-z0-9\s&.,'-]/g, '').trim();
+        if (candidate.length >= 3 && !/^\d+$/.test(candidate)) {
+          fillingStation = candidate.toUpperCase();
+          break;
+        }
+      }
     }
   }
 
-  // Fallback filling station to first plausible brand line (top 5 lines)
+  // 1B. Known Major Petroleum Marketers Dictionary (Exact & Normalized Substring Matching)
+  const knownStations = [
+    {
+      patterns: [
+        'TOTAL ENERGIES',
+        'TOTALENERGIES',
+        'TOTAL FILLING',
+        'TOTAL PETROLEUM',
+        'TOTAL SERVICE',
+        'TOTAL NIG',
+        'T0TAL ENERGIES',
+        'T0TALENERGIES',
+      ],
+      fuzzyTokens: ['TOTALENERGIES'],
+      standard: 'TOTAL ENERGIES FILLING STATION',
+    },
+    {
+      patterns: ['NNPC RETAIL', 'NNPC MEGA', 'NNPC FILLING', 'NNPC', 'NIGERIAN NATIONAL PETROLEUM', 'N.N.P.C'],
+      fuzzyTokens: ['NNPC'],
+      standard: 'NNPC RETAIL',
+    },
+    {
+      patterns: ['MOBIL', '11 PLC', 'DOUBLE ONE PLC', 'EXXONMOBIL', 'M0BIL'],
+      fuzzyTokens: ['MOBIL', 'EXXONMOBIL'],
+      standard: 'MOBIL SERVICE STATION',
+    },
+    {
+      patterns: ['OANDO', '0AND0', 'OANDO MARKETING', 'OANDO PLC'],
+      fuzzyTokens: ['OANDO'],
+      standard: 'OANDO SERVICE STATION',
+    },
+    {
+      patterns: ['CONOIL', 'C0N0IL', 'CONOIL PLC'],
+      fuzzyTokens: ['CONOIL'],
+      standard: 'CONOIL SERVICE STATION',
+    },
+    {
+      patterns: ['ARDOVA', 'AP FILLING', 'AP SERVICE', 'AFRICAN PETROLEUM'],
+      fuzzyTokens: ['ARDOVA'],
+      standard: 'ARDOVA PLC (AP)',
+    },
+    {
+      patterns: ['BOVAS', 'B0VAS', 'BOVAS AND COMPANY', 'BOVAS & CO'],
+      fuzzyTokens: ['BOVAS'],
+      standard: 'BOVAS FILLING STATION',
+    },
+    {
+      patterns: ['MRS OIL', 'MRS FILLING', 'MRS SERVICE', 'MRS PETROLEUM'],
+      fuzzyTokens: ['MRSOIL'],
+      standard: 'MRS OIL SERVICE STATION',
+    },
+    {
+      patterns: ['NIPCO', 'NIPC0', 'NIPCO PLC'],
+      fuzzyTokens: ['NIPCO'],
+      standard: 'NIPCO SERVICE STATION',
+    },
+    {
+      patterns: ['SHELL', 'SHELL PETROLEUM'],
+      fuzzyTokens: ['SHELL'],
+      standard: 'SHELL SERVICE STATION',
+    },
+    {
+      patterns: ['RAINOIL', 'RAIN OIL', 'RAIN0IL'],
+      fuzzyTokens: ['RAINOIL'],
+      standard: 'RAINOIL SERVICE STATION',
+    },
+    {
+      patterns: ['MATRIX ENERGY', 'MATRIX PETROLEUM', 'MATRIX'],
+      fuzzyTokens: ['MATRIX'],
+      standard: 'MATRIX ENERGY',
+    },
+    {
+      patterns: ['NORTHWEST PETROLEUM', 'NORTHWEST OIL', 'NORTHWEST'],
+      fuzzyTokens: ['NORTHWEST'],
+      standard: 'NORTHWEST PETROLEUM',
+    },
+    {
+      patterns: ['AA RANO', 'A.A. RANO', 'AARANO'],
+      fuzzyTokens: ['AARANO'],
+      standard: 'AA RANO NIGERIA LTD',
+    },
+    {
+      patterns: ['HEYDEN', 'HEYDEN PETROLEUM'],
+      fuzzyTokens: ['HEYDEN'],
+      standard: 'HEYDEN PETROLEUM',
+    },
+    {
+      patterns: ['ETERNA', 'ETERNA PLC', 'ETERNA OIL'],
+      fuzzyTokens: ['ETERNA'],
+      standard: 'ETERNA PLC',
+    },
+    {
+      patterns: ['PINNACLE OIL', 'PINNACLE'],
+      fuzzyTokens: ['PINNACLE'],
+      standard: 'PINNACLE OIL AND GAS',
+    },
+  ];
+
+  if (!fillingStation) {
+    for (const station of knownStations) {
+      if (
+        station.patterns.some(
+          (p) => upper.includes(p) || normalizedAlphaUpper.includes(p.replace(/0/g, 'O'))
+        )
+      ) {
+        fillingStation = station.standard;
+        break;
+      }
+    }
+  }
+
+  // 1C. Fuzzy Levenshtein brand matching on top header tokens (handles thermal print dropouts)
+  if (!fillingStation) {
+    const headerWords = normalizedAlphaUpper
+      .split(/\s+/)
+      .map((w) => w.replace(/[^A-Z]/g, ''))
+      .filter((w) => w.length >= 4);
+
+    outer: for (const word of headerWords.slice(0, 15)) {
+      for (const station of knownStations) {
+        for (const target of station.fuzzyTokens) {
+          if (target.length >= 5 && Math.abs(word.length - target.length) <= 1) {
+            if (levenshteinDistance(word, target) <= 1) {
+              fillingStation = station.standard;
+              break outer;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 1D. Industry Keyword Header Line Extraction (e.g. "AL-BARKA PETROLEUM LTD", "SUNRISE FILLING STATION")
   if (!fillingStation && lines.length > 0) {
-    const ignoredKeywords = /RECEIPT|CUSTOMER|WELCOME|INVOICE|PUMP|DATE|TIME|CASH|CARD|TERMINAL|MERCHANT|SLIP/i;
-    for (const line of lines.slice(0, 5)) {
-      if (ignoredKeywords.test(line)) continue;
-      const cleaned = line.replace(/[^A-Za-z0-9\s&.-]/g, '').trim();
-      if (cleaned.length >= 3 && cleaned.length <= 50) {
-        fillingStation = cleaned;
+    const headerSlice = lines.slice(0, Math.max(6, Math.ceil(lines.length * 0.35)));
+    const stationIndustryRegex =
+      /\b(PETROLEUM|FILLING\s+STATION|SERVICE\s+STATION|GAS\s+STATION|OIL\s*&\s*GAS|OIL\s+AND\s+GAS|ENERGY|FUELS?|RETAIL|LUBRICANTS|OIL\s+PLC|MOTORS)\b/i;
+    for (const line of headerSlice) {
+      if (/PRICE|RATE|TOTAL|AMOUNT|LITRE|LTR|PUMP|DATE|TIME|THANK\s+YOU/i.test(line)) continue;
+      if (stationIndustryRegex.test(line)) {
+        const cleaned = line
+          .replace(/^(?:WELCOME\s+TO|OFFICIAL\s+RECEIPT|TAX\s+INVOICE)[:\s-]*/i, '')
+          .replace(/[^A-Za-z0-9\s&.,'-]/g, '')
+          .trim();
+        if (cleaned.length >= 4 && cleaned.length <= 60) {
+          fillingStation = cleaned.toUpperCase();
+          break;
+        }
+      }
+    }
+  }
+
+  // 1E. Top-of-Receipt Header Fallback (First prominent merchant title line in top 6 lines)
+  if (!fillingStation && lines.length > 0) {
+    const ignoredHeaderNoise =
+      /^(?:RECEIPT|OFFICIAL\s+RECEIPT|POS\s+RECEIPT|CASH\s+RECEIPT|CUSTOMER\s+COPY|MERCHANT\s+COPY|TAX\s+INVOICE|INVOICE|WELCOME|PUMP|DATE|TIME|CASH|CARD|TERMINAL|SLIP|TRANSACTION|APPROVED|STAN|RRN|AID|TEL|PHONE|NO\.|PLOT|KM\s+\d|ROAD|STREET|EXPRESSWAY|LAGOS|ABUJA)\b/i;
+
+    for (const rawLine of lines.slice(0, 6)) {
+      // Strip "WELCOME TO " prefix if attached to the station name (e.g., "WELCOME TO DANMARNA OIL")
+      const strippedWelcome = rawLine.replace(/^WELCOME\s+TO\s+/i, '').trim();
+      if (ignoredHeaderNoise.test(strippedWelcome)) continue;
+      if (/PRICE|RATE|TOTAL|AMOUNT|LITRE|LTR|NGN|₦|\d{2}[/-]\d{2}[/-]\d{2,4}|\d{2}:\d{2}/i.test(strippedWelcome)) {
+        continue;
+      }
+
+      const cleaned = strippedWelcome.replace(/[^A-Za-z0-9\s&.-]/g, '').trim();
+      const alphaCount = (cleaned.match(/[A-Za-z]/g) || []).length;
+      if (cleaned.length >= 3 && cleaned.length <= 55 && alphaCount >= 3) {
+        fillingStation = cleaned.toUpperCase();
         break;
       }
     }
@@ -331,18 +589,20 @@ export function extractReceiptData(text: string): ParsedReceiptData {
   let extractedDate: string | null = null;
   let extractedTime: string | null = null;
 
-  // Look for date patterns (e.g. 22/10/2026, 2026-10-22, 22-10-2026, 22-Oct-2026)
-  const numericDateMatch = text.match(/\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})\b/);
+  const numericDateMatch = text.match(
+    /\b(\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})\b/
+  );
   if (numericDateMatch) {
     extractedDate = numericDateMatch[1];
   } else {
-    const wordDateMatch = text.match(/\b(\d{1,2}[-\s](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-\s,]+\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?[,\s]+\d{2,4})\b/i);
+    const wordDateMatch = text.match(
+      /\b(\d{1,2}[-\s](?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-\s,]+\d{2,4}|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?[,\s]+\d{2,4})\b/i
+    );
     if (wordDateMatch) {
       extractedDate = wordDateMatch[1].trim();
     }
   }
 
-  // Look for time patterns (e.g. 14:32:00, 14:32, 02:30 PM)
   const timeMatch = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?\s*(AM|PM)?\b/i);
   if (timeMatch) {
     extractedTime = timeMatch[0].trim();
@@ -359,7 +619,9 @@ export function extractReceiptData(text: string): ParsedReceiptData {
   let amount: number | null = null;
   for (const line of lines) {
     if (/PRICE|RATE|\/L|PER/i.test(line)) continue;
-    const match = line.match(/(?:TOTAL\s+(?:PAID|AMOUNT|DUE)|NET\s+AMOUNT|TOTAL|AMOUNT|NET|PAID|PAYMENT|SUM)[:\s]*(?:NGN|₦)?[:\s]*([0-9,]+(?:\.[0-9]{2})?)/i);
+    const match = line.match(
+      /(?:TOTAL\s+(?:PAID|AMOUNT|DUE|SALE)|NET\s+AMOUNT|TOTAL|AMOUNT|NET|PAID|PAYMENT|SUM)[:\s]*(?:NGN|₦|N)?[:\s]*([0-9,]+(?:\.[0-9]{2})?)/i
+    );
     if (match && match[1]) {
       const num = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(num) && num > 0) {
@@ -390,7 +652,9 @@ export function extractReceiptData(text: string): ParsedReceiptData {
       if (/PRICE|RATE|\/L|PER|PUMP|DATE|TIME/i.test(line)) continue;
       const numbers = line.match(/\b\d{4,6}(?:\.\d{2})?\b/g);
       if (numbers) {
-        const candidates = numbers.map((n) => parseFloat(n)).filter((n) => n >= 1000 && n <= 500000);
+        const candidates = numbers
+          .map((n) => parseFloat(n))
+          .filter((n) => n >= 1000 && n <= 500000);
         if (candidates.length > 0) {
           amount = Math.max(...candidates);
           break;
@@ -403,7 +667,9 @@ export function extractReceiptData(text: string): ParsedReceiptData {
   let quantityLitres: number | null = null;
   for (const line of lines) {
     if (/PRICE|RATE|\/L|PER/i.test(line)) continue;
-    const match = line.match(/(?:LITRES?|LTRS?|QTY|VOLUME|VOL)[:\s]*([0-9,]+(?:\.[0-9]{1,2})?)/i);
+    const match = line.match(
+      /(?:LITRES?|LTRS?|QTY|VOLUME|VOL)[:\s]*([0-9,]+(?:\.[0-9]{1,2})?)/i
+    );
     if (match && match[1]) {
       const num = parseFloat(match[1].replace(/,/g, ''));
       if (!isNaN(num) && num > 0 && num <= 500) {
@@ -431,7 +697,9 @@ export function extractReceiptData(text: string): ParsedReceiptData {
   // 5. Detect Unit Price / Rate for Mathematical Cross-Check and Recovery
   let unitRate: number | null = null;
   for (const line of lines) {
-    const rateMatch = line.match(/(?:RATE(?:\/L(?:TR)?)?|PRICE(?:\/L(?:TR)?)?|PER\s*L(?:TR)?|@)[:\s]*(?:NGN|₦)?[:\s]*([0-9,]+(?:\.[0-9]{2})?)/i);
+    const rateMatch = line.match(
+      /(?:RATE(?:\/L(?:TR)?)?|PRICE(?:\/L(?:TR)?)?|PER\s*L(?:TR)?|@)[:\s]*(?:NGN|₦)?[:\s]*([0-9,]+(?:\.[0-9]{2})?)/i
+    );
     if (rateMatch && rateMatch[1]) {
       const parsedRate = parseFloat(rateMatch[1].replace(/,/g, ''));
       if (!isNaN(parsedRate) && parsedRate >= 200 && parsedRate <= 2500) {
@@ -466,7 +734,11 @@ export function detectOdometerUnit(text: string): OdometerUnit {
   const upper = text.toUpperCase();
 
   // Explicit MPH detection on dial or display takes absolute priority
-  if (/\b(MPH|M\.P\.H|MILES)\b/i.test(upper) || /SPEED.*?MPH/i.test(upper) || upper.includes('MPH')) {
+  if (
+    /\b(MPH|M\.P\.H|MILES)\b/i.test(upper) ||
+    /SPEED.*?MPH/i.test(upper) ||
+    upper.includes('MPH')
+  ) {
     return 'mi';
   }
 
@@ -484,10 +756,48 @@ export interface OdometerAnalysis {
   canonicalKm: number | null;
 }
 
+const SPEEDOMETER_DIAL_NUMBERS = new Set([
+  10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200, 210,
+  220, 240, 260,
+]);
+
+/**
+ * Reconstructs spaced 7-segment LCD digits (e.g., "0 9 1 3 0 8" or "091 308" -> "091308")
+ * while avoiding merging speedometer dial graduations (e.g., "20 30 60 90 100 110 120").
+ */
+function reconstructSegmentedOdometerText(text: string): string {
+  const lines = text.split('\n');
+  const processedLines = lines.map((line) => {
+    // If a line contains spaced single digits like "0 9 1 3 0 8" or "09 13 08"
+    return line.replace(
+      /\b([0-9OILS|B]{1,3}(?:\s+[0-9OILS|B]{1,3}){1,5})\b/gi,
+      (match) => {
+        const parts = match.trim().split(/\s+/);
+        // Check if all parts look like speedometer graduation multiples of 10 (e.g. 20 30 60 90)
+        const allSpeedGraduations =
+          parts.length >= 2 &&
+          parts.every((p) => {
+            const n = parseInt(p, 10);
+            return !isNaN(n) && SPEEDOMETER_DIAL_NUMBERS.has(n);
+          });
+        if (allSpeedGraduations) {
+          return match; // Do not merge speedometer markings
+        }
+        const joined = parts.join('');
+        if (joined.length >= 5 && joined.length <= 7) {
+          return joined;
+        }
+        return match;
+      }
+    );
+  });
+  return processedLines.join('\n');
+}
+
 /**
  * Advanced heuristic parser that isolates the true odometer reading from speedometers,
  * trip meters (e.g. TRIP A 705.5), temperatures, and clock digits.
- * Accurately extracts readings such as "123456" with MPH and "057612" with KM.
+ * Accurately extracts readings such as "091308", "123456" with MPH, and "057612" with KM.
  */
 export function extractOdometerDetails(text: string): OdometerAnalysis {
   if (!text) {
@@ -495,6 +805,7 @@ export function extractOdometerDetails(text: string): OdometerAnalysis {
   }
 
   const detectedUnit = detectOdometerUnit(text);
+  const normalizedText = reconstructSegmentedOdometerText(text);
 
   // Helper to sanitize common 7-segment and alphanumeric misidentifications into pure digits
   const cleanToDigits = (str: string): string =>
@@ -507,7 +818,9 @@ export function extractOdometerDetails(text: string): OdometerAnalysis {
       .replace(/[^0-9.]/g, '');
 
   // 1. Direct ODO / 0D0 / ODOMETER / TOTAL pattern with numbers
-  const directOdoMatch = text.match(/(?:ODO|0D0|ODOMETER|TOTAL|T0TAL|TOTAL ODO)[:\s]*([0-9OILS.B]{4,7})/i);
+  const directOdoMatch = normalizedText.match(
+    /(?:ODO|0D0|ODOMETER|TOTAL|T0TAL|TOTAL ODO)[:\s]*([0-9OILS.B]{4,7})/i
+  );
   if (directOdoMatch && directOdoMatch[1]) {
     const cleaned = cleanToDigits(directOdoMatch[1]);
     const reading = parseFloat(cleaned);
@@ -521,9 +834,15 @@ export function extractOdometerDetails(text: string): OdometerAnalysis {
     }
   }
 
-  // 2. Tokenize and filter out trip meters or gauge numbers
-  const tokens = text.split(/\s+/);
-  type Candidate = { num: number; hasDecimal: boolean; nearOdo: boolean; length: number };
+  // 2. Tokenize and filter out trip meters or speedometer gauge markings
+  const tokens = normalizedText.split(/\s+/);
+  type Candidate = {
+    num: number;
+    hasDecimal: boolean;
+    nearOdo: boolean;
+    length: number;
+    hasLeadingZero: boolean;
+  };
   const candidates: Candidate[] = [];
 
   tokens.forEach((token, index) => {
@@ -535,21 +854,28 @@ export function extractOdometerDetails(text: string): OdometerAnalysis {
     if (!cleaned) return;
     const hasDecimal = cleaned.includes('.');
     const num = parseFloat(cleaned);
-    if (!isNaN(num) && num >= 100 && num <= 999999) {
+    const digitsOnly = cleaned.replace(/\./g, '');
+    const digitsCount = digitsOnly.length;
+
+    // Filter out standalone 2-to-3 digit speedometer scale numbers (e.g. 100, 110, 120, 140, 180, 200)
+    if (digitsCount <= 3 && SPEEDOMETER_DIAL_NUMBERS.has(num)) {
+      return;
+    }
+
+    if (!isNaN(num) && (num >= 100 || digitsCount >= 5) && num <= 999999) {
       const nearOdo =
-        /ODO|0D0|TOTAL|T0TAL/i.test(prevToken) ||
-        /ODO|0D0|TOTAL|T0TAL/i.test(token);
-      const digitsCount = cleaned.replace(/\./g, '').length;
+        /ODO|0D0|TOTAL|T0TAL/i.test(prevToken) || /ODO|0D0|TOTAL|T0TAL/i.test(token);
       candidates.push({
         num,
         hasDecimal,
         nearOdo,
         length: digitsCount,
+        hasLeadingZero: digitsOnly.startsWith('0') && digitsCount >= 5,
       });
     }
   });
 
-  // Score candidates: whole integers, 5-6 digits, and ODO proximity get highest priority
+  // Score candidates: whole integers, 5-6 digits, leading-zero LCD format (e.g. 091308), and ODO proximity get highest priority
   candidates.sort((a, b) => {
     let scoreA = 0;
     let scoreB = 0;
@@ -560,8 +886,11 @@ export function extractOdometerDetails(text: string): OdometerAnalysis {
     if (a.nearOdo) scoreA += 60;
     if (b.nearOdo) scoreB += 60;
 
-    if (a.length >= 5 && a.length <= 6) scoreA += 35;
-    if (b.length >= 5 && b.length <= 6) scoreB += 35;
+    if (a.length >= 5 && a.length <= 6) scoreA += 45;
+    if (b.length >= 5 && b.length <= 6) scoreB += 45;
+
+    if (a.hasLeadingZero) scoreA += 25;
+    if (b.hasLeadingZero) scoreB += 25;
 
     return scoreB - scoreA;
   });
@@ -593,6 +922,8 @@ export function extractOdometerDetails(text: string): OdometerAnalysis {
 export function extractOdometerNumber(text: string): number | null {
   if (!text) return null;
 
+  const normalizedText = reconstructSegmentedOdometerText(text);
+
   const cleanToDigits = (str: string): string =>
     str
       .toUpperCase()
@@ -603,14 +934,16 @@ export function extractOdometerNumber(text: string): number | null {
       .replace(/[^0-9.]/g, '');
 
   // Direct match for ODO / 0D0 / ODOMETER / TOTAL
-  const directMatch = text.match(/(?:ODO|0D0|ODOMETER|TOTAL|T0TAL)[:\s]*([0-9OILS.B]{4,7})/i);
+  const directMatch = normalizedText.match(
+    /(?:ODO|0D0|ODOMETER|TOTAL|T0TAL)[:\s]*([0-9OILS.B]{4,7})/i
+  );
   if (directMatch && directMatch[1]) {
     const val = parseFloat(cleanToDigits(directMatch[1]));
     if (!isNaN(val) && val >= 100 && val <= 999999) return val;
   }
 
-  // Tokenize and prioritize whole numbers (ignoring TRIP)
-  const tokens = text.split(/\s+/);
+  // Tokenize and prioritize whole numbers (ignoring TRIP and speedometer dial markings)
+  const tokens = normalizedText.split(/\s+/);
   const candidates: { num: number; score: number }[] = [];
 
   tokens.forEach((token, index) => {
@@ -620,12 +953,17 @@ export function extractOdometerNumber(text: string): number | null {
     const cleaned = cleanToDigits(token);
     if (!cleaned) return;
     const num = parseFloat(cleaned);
-    if (!isNaN(num) && num >= 100 && num <= 999999) {
+    const digitsOnly = cleaned.replace(/\./g, '');
+    const digitsLen = digitsOnly.length;
+
+    if (digitsLen <= 3 && SPEEDOMETER_DIAL_NUMBERS.has(num)) return;
+
+    if (!isNaN(num) && (num >= 100 || digitsLen >= 5) && num <= 999999) {
       let score = 0;
       if (!cleaned.includes('.')) score += 35;
       if (/ODO|0D0|TOTAL|T0TAL/i.test(prevToken)) score += 50;
-      const digitsLen = cleaned.replace(/\./g, '').length;
-      if (digitsLen >= 5 && digitsLen <= 6) score += 25;
+      if (digitsLen >= 5 && digitsLen <= 6) score += 40;
+      if (digitsOnly.startsWith('0') && digitsLen >= 5) score += 20;
       candidates.push({ num, score });
     }
   });
@@ -636,7 +974,7 @@ export function extractOdometerNumber(text: string): number | null {
   }
 
   // Fallback to integer matches
-  const matches = cleanToDigits(text).match(/\b\d{4,7}(\.\d{1,2})?\b/g);
+  const matches = cleanToDigits(normalizedText).match(/\b\d{4,7}(\.\d{1,2})?\b/g);
   if (matches && matches.length > 0) {
     for (const match of matches) {
       if (match.includes('.')) continue; // avoid trip decimals

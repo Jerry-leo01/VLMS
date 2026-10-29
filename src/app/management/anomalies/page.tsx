@@ -8,7 +8,7 @@ import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { AnomalyAlert } from '@/types/database';
 import { formatDateTime, formatAnomalyText } from '@/lib/utils';
-import { AlertTriangle, CheckCircle2, Search, ArrowLeft, ShieldAlert, Eye, MessageSquare } from 'lucide-react';
+import { ArrowLeft, ShieldAlert, Info } from 'lucide-react';
 
 const STANDARD_RESOLUTION_RESPONSES = [
   'Verified with staff member; odometer cluster was calibrated during scheduled maintenance.',
@@ -20,6 +20,57 @@ const STANDARD_RESOLUTION_RESPONSES = [
   'Others',
 ];
 
+const FLAGGING_RULES_REFERENCE = [
+  {
+    code: 'ODOMETER_ROLLBACK',
+    severity: 'High',
+    trigger: 'Submitted odometer reading is lower than the last confirmed vehicle odometer reading.',
+    purpose: 'Detects accidental digit typos, trip-meter confusion, or odometer tampering.',
+  },
+  {
+    code: 'DAILY_SPIKE_EXCEEDED',
+    severity: 'Medium',
+    trigger: 'Single-day distance delta exceeds 500 km since the previous reading.',
+    purpose: 'Flags unusually high daily mileage or an extra digit entered by mistake.',
+  },
+  {
+    code: 'OCR_MANUAL_MISMATCH',
+    severity: 'Low / Medium',
+    trigger: 'Confirmed odometer reading differs from the AI OCR reading by > 2% (or > 10% for Medium).',
+    purpose: 'Highlights manual overrides of high-confidence optical character recognition readings.',
+  },
+  {
+    code: 'LOW_OCR_CONFIDENCE',
+    severity: 'Low',
+    trigger: 'Submitted dashboard photo yielded an OCR confidence score below 75%.',
+    purpose: 'Prompts visual review of blurry, glare-affected, or obstructed instrument cluster photos.',
+  },
+  {
+    code: 'DUPLICATE_EVIDENCE_HASH',
+    severity: 'Critical',
+    trigger: 'SHA-256 cryptographic hash of the uploaded image matches a previously submitted photo.',
+    purpose: 'Prevents reuse of old odometer or fuel receipt photographs across multiple submissions.',
+  },
+  {
+    code: 'EXIF_TIMESTAMP_STALE',
+    severity: 'Medium',
+    trigger: 'Photo capture timestamp is more than 24 hours older than the submission time.',
+    purpose: 'Ensures photographic evidence is captured live at the time of logging.',
+  },
+  {
+    code: 'FUEL_CAPACITY_EXCEEDED',
+    severity: 'High',
+    trigger: 'Fuel purchase volume exceeds the vehicle fuel tank capacity (> 100 Litres).',
+    purpose: 'Detects external jerrycan fueling or decimal-point OCR/entry errors.',
+  },
+  {
+    code: 'TOM_VENDOR_POLICY_VIOLATION',
+    severity: 'High',
+    trigger: 'TOM corporate card used at a non-TotalEnergies filling station.',
+    purpose: 'Enforces corporate fleet fuel card vendor compliance.',
+  },
+];
+
 export default function AnomalyManagementPage() {
   const [alerts, setAlerts] = useState<AnomalyAlert[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +79,7 @@ export default function AnomalyManagementPage() {
   const [selectedPresetNote, setSelectedPresetNote] = useState<string>(STANDARD_RESOLUTION_RESPONSES[0]);
   const [customNote, setCustomNote] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [showRulesGuide, setShowRulesGuide] = useState<boolean>(false);
 
   const loadAlerts = async () => {
     try {
@@ -53,7 +105,13 @@ export default function AnomalyManagementPage() {
       return;
     }
     try {
-      await VLMSService.resolveAnomaly(selectedAlert.id, 'p-admin-01', newStatus, finalNote);
+      const adminProfile = await VLMSService.getCurrentAdminProfile();
+      await VLMSService.resolveAnomaly(
+        selectedAlert.id,
+        adminProfile?.id ?? 'admin-system',
+        newStatus,
+        finalNote
+      );
       setSelectedAlert(null);
       setSelectedPresetNote(STANDARD_RESOLUTION_RESPONSES[0]);
       setCustomNote('');
@@ -70,7 +128,7 @@ export default function AnomalyManagementPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <Navbar userRole="administrator" userName="Babajide Adeleke (Admin)" />
+      <Navbar userRole="administrator" />
 
       <div className="flex-1 flex">
         <ManagementSidebar />
@@ -85,15 +143,23 @@ export default function AnomalyManagementPage() {
                 <ArrowLeft className="w-4 h-4" />
               </Link>
               <div>
-                <h1 className="text-xl font-bold text-slate-900">Odometer Anomaly Review Queue</h1>
+                <h1 className="text-xl font-bold text-slate-900">Odometer & Fuel Anomaly Review Queue</h1>
                 <p className="text-xs text-slate-500">
-                  Explainable rules-based alerts for odometer decreases, distance spikes, and photo tampering
+                  Explainable rules-based alerts for odometer decreases, distance spikes, and photo verification
                 </p>
               </div>
             </div>
 
-            {/* Filter */}
-            <div className="flex items-center gap-2">
+            {/* Filter & Rules Guide Toggle */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowRulesGuide((v) => !v)}
+                className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 flex items-center gap-1.5 shadow-sm"
+              >
+                <Info className="w-3.5 h-3.5 text-blue-600" />
+                <span>{showRulesGuide ? 'Hide Flagging Rules Logic' : 'Why Are Items Flagged?'}</span>
+              </button>
               <span className="text-xs text-slate-500 font-medium">Filter Status:</span>
               <select
                 value={statusFilter}
@@ -109,7 +175,42 @@ export default function AnomalyManagementPage() {
             </div>
           </div>
 
-          {filteredAlerts.length === 0 ? (
+          {/* Explainable Flagging Logic Reference Panel */}
+          {showRulesGuide && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">
+                  Automated Flagging & Anomaly Detection Rules (8-Rule Audit Engine)
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Every daily odometer log and fuel purchase submission is evaluated against these 8 deterministic rules. Any violation automatically marks the submission as <strong>FLAGGED</strong> and creates an explainable alert below.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                {FLAGGING_RULES_REFERENCE.map((rule) => (
+                  <div
+                    key={rule.code}
+                    className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-navy-950">{rule.code}</span>
+                      <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold uppercase">
+                        {rule.severity}
+                      </span>
+                    </div>
+                    <p className="text-slate-800 font-semibold">{rule.trigger}</p>
+                    <p className="text-slate-500 text-[11px]">{rule.purpose}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-400 text-xs">
+              Loading anomaly review queue...
+            </div>
+          ) : filteredAlerts.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-400 text-xs">
               No anomaly alerts match the current filter.
             </div>
@@ -238,12 +339,14 @@ export default function AnomalyManagementPage() {
                   <label className="block text-xs font-semibold text-slate-700">
                     Specify Custom Supervisory Details <span className="text-red-500">*</span>
                   </label>
+                  <span className="block text-[11px] text-slate-500 mt-0.5">
+                    Enter your detailed explanation and supervisory findings for this anomaly
+                  </span>
                   <textarea
                     required
                     rows={3}
                     value={customNote}
                     onChange={(e) => setCustomNote(e.target.value)}
-                    placeholder="Enter specific explanation and supervisory findings for this anomaly..."
                     className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
                   />
                 </div>

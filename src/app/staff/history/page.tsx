@@ -20,15 +20,22 @@ export default function StaffHistoryPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const staff = await VLMSService.getStaffProfile('p-staff-01');
-        const asg = await VLMSService.getActiveAssignment('p-staff-01');
+        const { profile: staff, assignment: asg } = await VLMSService.getCurrentStaffContext();
         const allLogs = await VLMSService.getAllDailyLogs();
         const allFuel = await VLMSService.getAllFuelTransactions();
 
         if (staff) setProfile(staff);
         if (asg) setAssignment(asg);
-        setLogs(allLogs);
-        setFuelTx(allFuel);
+
+        const filteredLogs = asg
+          ? allLogs.filter((l) => l.vehicle_id === asg.vehicle_id)
+          : allLogs;
+        const filteredFuel = asg
+          ? allFuel.filter((f) => f.vehicle_id === asg.vehicle_id)
+          : allFuel;
+
+        setLogs(filteredLogs);
+        setFuelTx(filteredFuel);
       } catch (err) {
         console.error('Failed to load history:', err);
       } finally {
@@ -42,8 +49,8 @@ export default function StaffHistoryPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col pb-24 md:pb-8">
       <Navbar
         userRole="staff"
-        userName={profile?.full_name ?? 'Chukwuma Eze'}
-        vehiclePlate={assignment?.vehicle?.plate_number ?? 'KJA-842XA'}
+        userName={profile?.full_name}
+        vehiclePlate={assignment?.vehicle?.plate_number}
       />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 w-full py-6 space-y-6 flex-1">
@@ -103,7 +110,7 @@ export default function StaffHistoryPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-sm text-navy-950">
-                        {log.vehicle?.plate_number ?? 'KJA-842XA'}
+                        {log.vehicle?.plate_number ?? assignment?.vehicle?.plate_number ?? 'Assigned Vehicle'}
                       </span>
                       <span className="text-xs text-slate-500">• {log.business_date}</span>
                     </div>

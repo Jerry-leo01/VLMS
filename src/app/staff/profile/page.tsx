@@ -15,8 +15,7 @@ export default function StaffProfilePage() {
 
   useEffect(() => {
     async function loadData() {
-      const staff = await VLMSService.getStaffProfile('p-staff-01');
-      const asg = await VLMSService.getActiveAssignment('p-staff-01');
+      const { profile: staff, assignment: asg } = await VLMSService.getCurrentStaffContext();
       if (staff) setProfile(staff);
       if (asg) {
         setAssignment(asg);
@@ -31,8 +30,8 @@ export default function StaffProfilePage() {
     <div className="min-h-screen bg-slate-50 flex flex-col pb-24 md:pb-8">
       <Navbar
         userRole="staff"
-        userName={profile?.full_name ?? 'Chukwuma Eze'}
-        vehiclePlate={assignment?.vehicle?.plate_number ?? 'KJA-842XA'}
+        userName={profile?.full_name}
+        vehiclePlate={assignment?.vehicle?.plate_number}
       />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 w-full py-6 space-y-6 flex-1">
@@ -41,10 +40,10 @@ export default function StaffProfilePage() {
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
           <div className="flex items-center gap-4 border-b border-slate-100 pb-5">
             <div className="w-14 h-14 rounded-full bg-navy-900 text-white flex items-center justify-center font-bold text-lg">
-              {profile?.full_name.charAt(0) ?? 'C'}
+              {profile?.full_name?.charAt(0) ?? 'S'}
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-900">{profile?.full_name ?? 'Chukwuma Eze'}</h2>
+              <h2 className="text-lg font-bold text-slate-900">{profile?.full_name ?? 'Assigned Driver'}</h2>
               <span className="text-xs text-slate-500 block">
                 Phone: {profile?.phone_number ?? profile?.employee_id ?? 'Not provided'}
               </span>
@@ -60,7 +59,7 @@ export default function StaffProfilePage() {
                 <Car className="w-4 h-4 text-navy-800" /> Assigned Company Car
               </span>
               <span className="font-mono font-bold text-navy-950">
-                {assignment?.vehicle?.plate_number ?? 'KJA-842XA'} ({assignment?.vehicle?.car_name || assignment?.vehicle?.make} {assignment?.vehicle?.model})
+                {assignment?.vehicle?.plate_number ?? 'Unassigned'} {assignment?.vehicle ? `(${assignment.vehicle.car_name || assignment.vehicle.make} ${assignment.vehicle.model})` : ''}
               </span>
             </div>
 
@@ -69,7 +68,7 @@ export default function StaffProfilePage() {
                 <CreditCard className="w-4 h-4 text-navy-800" /> Assigned TOM Number
               </span>
               <span className="font-mono font-bold text-navy-950 bg-slate-100 px-2.5 py-0.5 rounded">
-                {tomCard?.masked_card_number ?? '804689'}
+                {tomCard?.masked_card_number ?? profile?.tom_card?.masked_card_number ?? 'Not assigned'}
               </span>
             </div>
 
@@ -78,7 +77,7 @@ export default function StaffProfilePage() {
                 <Building className="w-4 h-4 text-navy-800" /> Operating Office
               </span>
               <span className="font-semibold text-slate-900">
-                {profile?.office?.name ?? 'Lagos Corporate HQ'}
+                {profile?.office?.name ?? 'Corporate Branch'}
               </span>
             </div>
           </div>

@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Car, User, LogOut, Shield, Menu, X, FileText, Fuel, LayoutGrid } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { toggleAdminSidebar } from '@/components/layout/ManagementSidebar';
+import { VLMSService } from '@/lib/services/vlms-service';
 
 interface NavbarProps {
   userRole?: 'staff' | 'department_head' | 'fleet_manager' | 'auditor' | 'administrator';
@@ -12,10 +13,29 @@ interface NavbarProps {
   vehiclePlate?: string;
 }
 
-export function Navbar({ userRole = 'staff', userName = 'Staff Member', vehiclePlate }: NavbarProps) {
+export function Navbar({ userRole = 'staff', userName, vehiclePlate }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [resolvedName, setResolvedName] = useState<string>(userName || '');
+  const [resolvedPlate, setResolvedPlate] = useState<string | undefined>(vehiclePlate);
 
   const isManagement = ['department_head', 'fleet_manager', 'auditor', 'administrator'].includes(userRole);
+
+  useEffect(() => {
+    const session = VLMSService.getActiveSession();
+    if (userName) {
+      setResolvedName(userName);
+    } else if (session?.fullName) {
+      setResolvedName(session.fullName);
+    } else {
+      setResolvedName(isManagement ? 'System Administrator' : 'Assigned Driver');
+    }
+
+    if (vehiclePlate) {
+      setResolvedPlate(vehiclePlate);
+    } else if (session?.plateNumber) {
+      setResolvedPlate(session.plateNumber);
+    }
+  }, [userName, vehiclePlate, isManagement]);
 
   return (
     <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs transition-colors">
@@ -78,9 +98,9 @@ export function Navbar({ userRole = 'staff', userName = 'Staff Member', vehicleP
           <ThemeToggle />
 
           <div className="hidden sm:flex flex-col text-right">
-            <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{userName}</span>
-            {vehiclePlate && (
-              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-semibold">Plate: {vehiclePlate}</span>
+            <span className="text-xs font-bold text-slate-900 dark:text-slate-100">{resolvedName}</span>
+            {resolvedPlate && (
+              <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400 font-semibold">Plate: {resolvedPlate}</span>
             )}
           </div>
 
@@ -123,7 +143,7 @@ export function Navbar({ userRole = 'staff', userName = 'Staff Member', vehicleP
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-4 pt-2 pb-4 space-y-1 shadow-xl">
           <div className="py-2 border-b border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400">
-            Signed in as: <strong className="text-navy-900 dark:text-white">{userName}</strong> ({userRole})
+            Signed in as: <strong className="text-navy-900 dark:text-white">{resolvedName}</strong> ({userRole})
           </div>
           {!isManagement ? (
             <>

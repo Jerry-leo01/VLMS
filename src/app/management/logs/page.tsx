@@ -41,7 +41,7 @@ export default function ManagementLogsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <Navbar userRole="administrator" userName="Babajide Adeleke (Admin)" />
+      <Navbar userRole="administrator" />
 
       <div className="flex-1 flex">
         <ManagementSidebar />
@@ -63,15 +63,19 @@ export default function ManagementLogsPage() {
               </div>
             </div>
 
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Filter plate, staff, date..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs w-60 focus:outline-none focus:ring-1 focus:ring-navy-800"
-              />
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Filter by Plate, Staff, or Date
+              </label>
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs w-60 focus:outline-none focus:ring-1 focus:ring-navy-800"
+                />
+              </div>
             </div>
           </div>
 

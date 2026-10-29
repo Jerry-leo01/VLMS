@@ -46,11 +46,19 @@ export function ReceiptConfirmation({
   onConfirm,
   onRetake,
 }: ReceiptConfirmationProps) {
-  // Editable fields initialized from OCR extraction
+  const getLiveFormattedTimestamp = () => {
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    return `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  };
+
+  // Editable fields initialized from OCR extraction with automatic real-time timestamp fallback
   const [stationName, setStationName] = useState(
     ocrResult.fillingStation || ocrResult.vendorName || ''
   );
-  const [dateTime, setDateTime] = useState(ocrResult.transactionDateTime || '');
+  const [dateTime, setDateTime] = useState(
+    ocrResult.transactionDateTime || getLiveFormattedTimestamp()
+  );
   const [amountInput, setAmountInput] = useState(
     ocrResult.amount ? ocrResult.amount.toString() : ''
   );
@@ -62,7 +70,7 @@ export function ReceiptConfirmation({
 
   useEffect(() => {
     setStationName(ocrResult.fillingStation || ocrResult.vendorName || '');
-    setDateTime(ocrResult.transactionDateTime || '');
+    setDateTime(ocrResult.transactionDateTime || getLiveFormattedTimestamp());
     setAmountInput(ocrResult.amount ? ocrResult.amount.toString() : '');
     setLitresInput(ocrResult.quantityLitres ? ocrResult.quantityLitres.toString() : '');
   }, [ocrResult]);
@@ -165,9 +173,11 @@ export function ReceiptConfirmation({
               type="text"
               value={stationName}
               onChange={(e) => setStationName(e.target.value)}
-              placeholder="e.g. TOTAL ENERGIES FILLING STATION"
               className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
             />
+            <span className="text-[10px] text-slate-500 mt-0.5 block">
+              Extracted from receipt header (or select station brand below)
+            </span>
             {/* Quick selector buttons */}
             <div className="flex flex-wrap gap-1.5 mt-2">
               {COMMON_STATIONS.map((station) => (
@@ -197,11 +207,10 @@ export function ReceiptConfirmation({
               type="text"
               value={dateTime}
               onChange={(e) => setDateTime(e.target.value)}
-              placeholder="e.g. 24/10/2026 14:32"
               className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
             />
-            <span className="text-[10px] text-slate-400 mt-0.5 block">
-              Format: DD/MM/YYYY HH:MM or as printed on receipt
+            <span className="text-[10px] text-slate-500 mt-0.5 block">
+              Auto-populated from receipt or live system clock (DD/MM/YYYY HH:MM:SS)
             </span>
           </div>
 
@@ -219,9 +228,9 @@ export function ReceiptConfirmation({
                 min="0.1"
                 value={litresInput}
                 onChange={(e) => setLitresInput(e.target.value)}
-                placeholder="e.g. 45.2"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
               />
+              <span className="text-[10px] text-slate-500 mt-0.5 block">Volume dispensed (L)</span>
             </div>
 
             {/* Total Amount */}
@@ -236,9 +245,9 @@ export function ReceiptConfirmation({
                 min="1"
                 value={amountInput}
                 onChange={(e) => setAmountInput(e.target.value)}
-                placeholder="e.g. 38420"
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-bold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
               />
+              <span className="text-[10px] text-slate-500 mt-0.5 block">Total paid in Naira</span>
             </div>
           </div>
 

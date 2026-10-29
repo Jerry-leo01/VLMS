@@ -8,7 +8,7 @@ import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { FuelTransaction } from '@/types/database';
 import { formatCurrency, formatOdometer, formatDateTime } from '@/lib/utils';
-import { ArrowLeft, Search, Fuel } from 'lucide-react';
+import { ArrowLeft, Search, ExternalLink, Eye } from 'lucide-react';
 
 export default function ManagementFuelPage() {
   const [transactions, setTransactions] = useState<FuelTransaction[]>([]);
@@ -41,7 +41,7 @@ export default function ManagementFuelPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <Navbar userRole="administrator" userName="Babajide Adeleke (Admin)" />
+      <Navbar userRole="administrator" />
 
       <div className="flex-1 flex">
         <ManagementSidebar />
@@ -58,20 +58,28 @@ export default function ManagementFuelPage() {
               <div>
                 <h1 className="text-xl font-bold text-slate-900">Fleet Fuel Transactions</h1>
                 <p className="text-xs text-slate-500">
-                  Audit trail of all recorded TOM Card and personal-fund fuel expenditures
+                  Click any vehicle plate number to open the photographic receipt & odometer evidence for that transaction
                 </p>
               </div>
             </div>
 
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                placeholder="Filter vendor, plate..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs w-60 focus:outline-none focus:ring-1 focus:ring-navy-800"
-              />
+            <div>
+              <label
+                htmlFor="fuelSearchInput"
+                className="block text-[11px] font-semibold text-slate-700 mb-1"
+              >
+                Filter by Plate, Staff, or Filling Station
+              </label>
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  id="fuelSearchInput"
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-900 w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-navy-800"
+                />
+              </div>
             </div>
           </div>
 
@@ -80,11 +88,11 @@ export default function ManagementFuelPage() {
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
                   <tr>
-                    <th className="py-3 px-4">Purchased Date</th>
-                    <th className="py-3 px-4">Vehicle Plate</th>
+                    <th className="py-3 px-4">Purchased Date & Time</th>
+                    <th className="py-3 px-4">Vehicle Plate (Evidence Link)</th>
                     <th className="py-3 px-4">Staff Member</th>
                     <th className="py-3 px-4">Payment Method</th>
-                    <th className="py-3 px-4">Vendor / Station</th>
+                    <th className="py-3 px-4">Filling Station</th>
                     <th className="py-3 px-4">Total Amount (NGN)</th>
                     <th className="py-3 px-4">Quantity</th>
                     <th className="py-3 px-4">Odometer</th>
@@ -94,36 +102,74 @@ export default function ManagementFuelPage() {
                 <tbody className="divide-y divide-slate-100">
                   {filtered.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-slate-400">
-                        No fuel transactions found.
+                      <td colSpan={9} className="py-8 text-center text-slate-500">
+                        No fuel transactions recorded yet.
                       </td>
                     </tr>
                   ) : (
-                    filtered.map((tx) => (
-                      <tr key={tx.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-4 font-mono text-slate-600">{formatDateTime(tx.purchased_at)}</td>
-                        <td className="py-3 px-4 font-mono font-bold text-navy-950">{tx.vehicle?.plate_number}</td>
-                        <td className="py-3 px-4 font-medium text-slate-800">{tx.user?.full_name}</td>
-                        <td className="py-3 px-4">
-                          <span className="px-2 py-0.5 rounded text-[11px] font-semibold uppercase bg-slate-100 text-slate-700">
-                            {tx.payment_method.replace('_', ' ')}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-800 font-semibold">{tx.vendor_name}</td>
-                        <td className="py-3 px-4 font-mono font-bold text-slate-900">{formatCurrency(tx.amount)}</td>
-                        <td className="py-3 px-4 font-mono text-slate-600">{tx.quantity_litres} L</td>
-                        <td className="py-3 px-4 font-mono text-slate-600">{formatOdometer(tx.odometer_km)}</td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase ${
-                              tx.status === 'flagged' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                            }`}
-                          >
-                            {tx.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
+                    filtered.map((tx) => {
+                      const plate = tx.vehicle?.plate_number ?? tx.vehicle_id;
+                      const evidenceHref = `/management/evidence?txId=${encodeURIComponent(
+                        tx.id
+                      )}&plate=${encodeURIComponent(plate)}`;
+
+                      return (
+                        <tr key={tx.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-4 font-mono text-slate-600">
+                            {formatDateTime(tx.purchased_at)}
+                          </td>
+                          <td className="py-3 px-4">
+                            <Link
+                              href={evidenceHref}
+                              title={`Inspect photographic evidence for ${plate}`}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-navy-900 hover:bg-blue-700 text-white font-mono font-bold text-xs shadow-xs transition-colors"
+                            >
+                              <span>{plate}</span>
+                              <ExternalLink className="w-3 h-3 text-blue-300" />
+                            </Link>
+                          </td>
+                          <td className="py-3 px-4 font-medium text-slate-800">
+                            {tx.user?.full_name ?? 'Assigned Driver'}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold uppercase bg-slate-100 text-slate-700">
+                              {tx.payment_method.replace('_', ' ')}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-slate-800 font-semibold">
+                            {tx.vendor_name}
+                          </td>
+                          <td className="py-3 px-4 font-mono font-bold text-slate-900">
+                            {formatCurrency(tx.amount)}
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-600">
+                            {tx.quantity_litres} L
+                          </td>
+                          <td className="py-3 px-4 font-mono text-slate-600">
+                            {formatOdometer(tx.odometer_km)}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase ${
+                                  tx.status === 'flagged'
+                                    ? 'bg-amber-100 text-amber-800'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}
+                              >
+                                {tx.status}
+                              </span>
+                              <Link
+                                href={evidenceHref}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:underline"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> Photo
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -132,26 +178,57 @@ export default function ManagementFuelPage() {
             {/* Mobile Card List */}
             <div className="md:hidden divide-y divide-slate-100">
               {filtered.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 text-xs">No fuel transactions found.</div>
+                <div className="p-6 text-center text-slate-500 text-xs">
+                  No fuel transactions recorded yet.
+                </div>
               ) : (
-                filtered.map((tx) => (
-                  <div key={tx.id} className="p-4 space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-sm text-slate-900">{tx.vendor_name}</span>
-                      <span className="font-mono font-bold text-navy-950 text-sm">{formatCurrency(tx.amount)}</span>
+                filtered.map((tx) => {
+                  const plate = tx.vehicle?.plate_number ?? tx.vehicle_id;
+                  const evidenceHref = `/management/evidence?txId=${encodeURIComponent(
+                    tx.id
+                  )}&plate=${encodeURIComponent(plate)}`;
+
+                  return (
+                    <div key={tx.id} className="p-4 space-y-2.5 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sm text-slate-900">{tx.vendor_name}</span>
+                        <span className="font-mono font-bold text-navy-950 text-sm">
+                          {formatCurrency(tx.amount)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-600 text-[11px]">
+                        <div className="flex items-center gap-1.5">
+                          <span>Plate:</span>
+                          <Link
+                            href={evidenceHref}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-navy-900 text-white font-mono font-bold text-xs"
+                          >
+                            <span>{plate}</span>
+                            <ExternalLink className="w-3 h-3 text-blue-300" />
+                          </Link>
+                        </div>
+                        <span>
+                          Volume: <strong className="text-slate-900">{tx.quantity_litres} L</strong>
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[11px] text-slate-600">
+                        <span>Staff: {tx.user?.full_name ?? 'Assigned Driver'}</span>
+                        <span>Odo: {formatOdometer(tx.odometer_km)}</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-100 text-slate-700">
+                          {tx.payment_method.replace('_', ' ')}
+                        </span>
+                        <Link
+                          href={evidenceHref}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 hover:underline"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> Inspect Evidence Photo →
+                        </Link>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-slate-600 text-[11px]">
-                      <span>Vehicle: <strong className="font-mono text-slate-900">{tx.vehicle?.plate_number}</strong></span>
-                      <span>Volume: <strong className="text-slate-900">{tx.quantity_litres} L</strong></span>
-                    </div>
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-100 text-slate-700">
-                        {tx.payment_method.replace('_', ' ')}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">{formatDateTime(tx.purchased_at)}</span>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

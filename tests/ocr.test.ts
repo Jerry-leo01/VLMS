@@ -69,6 +69,13 @@ describe('OCR Odometer Number Extractor', () => {
     expect(details.canonicalKm).toBe(toCanonicalKm(91308, 'mi'));
   });
 
+  it('should reconstruct spaced 7-segment LCD digits (e.g. "0 9 1 3 0 8" or "091 308") without merging speedometer markings', () => {
+    const spacedLcdCluster = '10 20 30 60 90 100 110 120 MPH km/h\n0 9 1 3 0 8';
+    expect(extractOdometerNumber(spacedLcdCluster)).toBe(91308);
+    const details = extractOdometerDetails(spacedLcdCluster);
+    expect(details.proposedReading).toBe(91308);
+  });
+
   it('should return null if no numbers found', () => {
     expect(extractOdometerNumber('Check engine light')).toBeNull();
   });
@@ -187,6 +194,21 @@ describe('OCR Receipt Data Parser', () => {
     // 45000 / 900 = 50
     expect(res.quantityLitres).toBe(50);
     expect(res.amount).toBe(45000);
+  });
+
+  it('should accurately extract independent filling station header even when preceded by WELCOME TO or POS RECEIPT', () => {
+    const customStationReceipt = `
+      POS RECEIPT
+      WELCOME TO AL-BARKA PETROLEUM LTD
+      Plot 45 Ahmadu Bello Way, Abuja
+      Date: 29/10/2026 09:15 AM
+      LITRES: 40.00 L
+      TOTAL PAID: ₦36,000.00
+    `;
+    const res = extractReceiptData(customStationReceipt);
+    expect(res.fillingStation).toBe('AL-BARKA PETROLEUM LTD');
+    expect(res.amount).toBe(36000);
+    expect(res.quantityLitres).toBe(40);
   });
 });
 

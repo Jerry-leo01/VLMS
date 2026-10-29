@@ -55,6 +55,8 @@ export interface Profile {
   updated_at: string;
   office?: Office;
   roles?: UserRole[];
+  assigned_vehicle?: Vehicle | null;
+  tom_card?: TomCard | null;
 }
 
 export interface Vehicle {
@@ -67,6 +69,10 @@ export interface Vehicle {
   status: VehicleStatus;
   created_at: string;
   updated_at: string;
+  assigned_user?: Profile | null;
+  assigned_office?: Office | null;
+  tom_card?: TomCard | null;
+  latest_odometer_km?: number | null;
 }
 
 export interface VehicleAssignment {
@@ -91,6 +97,8 @@ export interface TomCard {
   status: TomCardStatus;
   created_at: string;
   updated_at: string;
+  vehicle?: Vehicle | null;
+  user?: Profile | null;
 }
 
 export interface RegistrationRequest {
@@ -117,6 +125,7 @@ export interface EvidenceFile {
   id: string;
   storage_bucket: string;
   storage_path: string;
+  data_url?: string | null;
   evidence_type: EvidenceType;
   sha256_hash: string;
   captured_at: string | null;
