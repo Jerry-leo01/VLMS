@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { Navbar } from '@/components/layout/Navbar';
 import { ManagementSidebar } from '@/components/layout/ManagementSidebar';
 import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
-import { VLMSService, EvidenceGalleryItem } from '@/lib/services/vlms-service';
-import { DailyLog, AnomalyAlert } from '@/types/database';
+import { VLMSService, EvidenceGalleryItem, DashboardMetrics } from '@/lib/services/vlms-service';
+import { DailyLog, AnomalyAlert, FuelTransaction } from '@/types/database';
 import {
   formatCurrency,
   formatOdometer,
@@ -35,22 +35,32 @@ import { AdaptiveDatePicker } from '@/components/ui/AdaptiveDatePicker';
 import { DateRangeSelection, getPresetDateRange, isDateInRange } from '@/lib/date-utils';
 
 export default function ManagementDashboardPage() {
-  const [metrics, setMetrics] = useState({
+  const [metrics, setMetrics] = useState<DashboardMetrics>({
     totalUsers: 0,
     activeStaff: 0,
     totalVehicles: 0,
     activeVehicles: 0,
+    submittedLogs: 0,
     submittedToday: 0,
     missingDailyLogs: 0,
+    uniqueVehiclesLogged: 0,
+    fuelTransactionsCount: 0,
     fuelTransactionsToday: 0,
     totalFuelExpenditure: 0,
+    totalFuelExpenditureAllTime: 0,
+    totalLitres: 0,
     openAnomalies: 0,
+    totalAnomaliesInRange: 0,
+    resolvedAnomaliesInRange: 0,
+    vehiclesActiveInRange: 0,
+    driversActiveInRange: 0,
     pendingApprovals: 0,
   });
 
   const [recentLogs, setRecentLogs] = useState<DailyLog[]>([]);
   const [evidenceItems, setEvidenceItems] = useState<EvidenceGalleryItem[]>([]);
   const [anomalies, setAnomalies] = useState<AnomalyAlert[]>([]);
+  const [allFuel, setAllFuel] = useState<FuelTransaction[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateRange, setDateRange] = useState<DateRangeSelection>(getPresetDateRange('all'));
   const [loading, setLoading] = useState(true);
@@ -60,16 +70,21 @@ export default function ManagementDashboardPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [m, logs, alerts, gallery] = await Promise.all([
-          VLMSService.getDashboardMetrics(),
+        const [m, logs, alerts, gallery, fuel] = await Promise.all([
+          VLMSService.getDashboardMetrics({
+            startDate: dateRange.startDate,
+            endDate: dateRange.endDate,
+          }),
           VLMSService.getAllDailyLogs(),
           VLMSService.getAllAnomalies(),
           VLMSService.getEvidenceGallery(),
+          VLMSService.getAllFuelTransactions(),
         ]);
         setMetrics(m);
         setRecentLogs(logs);
         setAnomalies(alerts);
         setEvidenceItems(gallery);
+        setAllFuel(fuel);
       } catch (err) {
         console.error('Failed to load management dashboard:', err);
       } finally {
@@ -77,7 +92,7 @@ export default function ManagementDashboardPage() {
       }
     }
     loadData();
-  }, []);
+  }, [dateRange.startDate, dateRange.endDate, dateRange.preset]);
 
   const filteredLogs = recentLogs.filter((log) => {
     const matchesDate = isDateInRange(
@@ -103,6 +118,16 @@ export default function ManagementDashboardPage() {
     (a) =>
       (a.rule_code === 'DAILY_MILEAGE_DIFF' || a.rule_code === 'FUEL_PURCHASE_VARIANCE') &&
       isDateInRange(a.created_at, dateRange.startDate, dateRange.endDate)
+  );
+
+  const isSingleDay =
+    dateRange.preset === 'today' ||
+    (Boolean(dateRange.startDate) &&
+      Boolean(dateRange.endDate) &&
+      dateRange.startDate === dateRange.endDate);
+
+  const filteredEvidence = evidenceItems.filter((item) =>
+    isDateInRange(item.businessDate || item.submittedAt, dateRange.startDate, dateRange.endDate)
   );
 
   return (
@@ -229,50 +254,148 @@ export default function ManagementDashboardPage() {
 
           {/* Real Database KPI Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-              <span className="text-xs font-medium text-slate-500">Today&apos;s Logs Submitted</span>
-              <div className="text-2xl font-bold font-mono text-slate-900">
-                {metrics.submittedToday}{' '}
-                <span className="text-xs font-normal text-slate-400">
-                  / {metrics.activeVehicles} active
+            {/* Card 1: Daily Logs & Fleet Submission Progress */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1.5 transition-all">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-medium text-slate-500 truncate">
+                  {dateRange.preset === 'today'
+                    ? "Today's Logs Submitted"
+                    : dateRange.preset === 'all'
+                    ? 'Total Logs Submitted'
+                    : 'Logs Submitted'}
                 </span>
+                {dateRange.preset !== 'all' && dateRange.preset !== 'today' && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 shrink-0 truncate max-w-[110px]">
+                    {dateRange.label}
+                  </span>
+                )}
               </div>
-              <span className="text-[11px] text-emerald-600 font-semibold block">
-                {metrics.missingDailyLogs === 0
-                  ? '100% Complete'
-                  : `${metrics.missingDailyLogs} vehicles pending`}
+              <div className="text-2xl font-bold font-mono text-slate-900">
+                {isSingleDay ? (
+                  <>
+                    {metrics.submittedLogs ?? metrics.submittedToday}{' '}
+                    <span className="text-xs font-normal text-slate-400">
+                      / {metrics.activeVehicles} active
+                    </span>
+                  </>
+                ) : dateRange.preset === 'all' ? (
+                  <>
+                    {metrics.submittedLogs ?? recentLogs.length}{' '}
+                    <span className="text-xs font-normal text-slate-400">
+                      total logs
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {metrics.submittedLogs}{' '}
+                    <span className="text-xs font-normal text-slate-400">
+                      logs ({metrics.uniqueVehiclesLogged ?? 0} veh.)
+                    </span>
+                  </>
+                )}
+              </div>
+              <span className="text-[11px] text-emerald-600 font-semibold block truncate">
+                {isSingleDay
+                  ? metrics.missingDailyLogs === 0
+                    ? '100% Complete'
+                    : `${metrics.missingDailyLogs} vehicle${metrics.missingDailyLogs === 1 ? '' : 's'} pending`
+                  : `${metrics.uniqueVehiclesLogged ?? 0} of ${metrics.activeVehicles} active vehicles logged`}
               </span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-              <span className="text-xs font-medium text-slate-500">Total Fuel Expenditure</span>
-              <div className="text-2xl font-bold font-mono text-slate-900">
+            {/* Card 2: Fuel Expenditure & Transactions */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1.5 transition-all">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-medium text-slate-500 truncate">
+                  {dateRange.preset === 'today'
+                    ? "Today's Fuel Spend"
+                    : dateRange.preset === 'all'
+                    ? 'Total Fuel Expenditure'
+                    : 'Fuel Expenditure'}
+                </span>
+                {dateRange.preset !== 'all' && dateRange.preset !== 'today' && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0 truncate max-w-[110px]">
+                    {dateRange.label}
+                  </span>
+                )}
+              </div>
+              <div className="text-2xl font-bold font-mono text-slate-900 truncate">
                 {formatCurrency(metrics.totalFuelExpenditure)}
               </div>
-              <span className="text-[11px] text-slate-500 block">
-                {metrics.fuelTransactionsToday} transaction(s) today
+              <span className="text-[11px] text-slate-500 block truncate">
+                {dateRange.preset === 'today'
+                  ? `${metrics.fuelTransactionsCount ?? metrics.fuelTransactionsToday} transaction(s) today`
+                  : dateRange.preset === 'all'
+                  ? `${metrics.fuelTransactionsCount ?? allFuel.length} total transaction(s)`
+                  : `${metrics.fuelTransactionsCount ?? 0} transaction(s) in period`}
+                {metrics.totalLitres > 0 && ` • ${Math.round(metrics.totalLitres).toLocaleString()} L`}
               </span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-              <span className="text-xs font-medium text-slate-500">Active Fleet Vehicles</span>
-              <div className="text-2xl font-bold font-mono text-slate-900">
-                {metrics.activeVehicles}{' '}
-                <span className="text-xs font-normal text-slate-400">
-                  / {metrics.totalVehicles} total
+            {/* Card 3: Active Fleet Vehicles & Fleet Utilization */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1.5 transition-all">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-medium text-slate-500 truncate">
+                  {dateRange.preset === 'all'
+                    ? 'Active Fleet Vehicles'
+                    : dateRange.preset === 'today'
+                    ? 'Active Fleet Today'
+                    : 'Fleet Utilization'}
                 </span>
+                {dateRange.preset !== 'all' && dateRange.preset !== 'today' && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 shrink-0 truncate max-w-[110px]">
+                    {dateRange.label}
+                  </span>
+                )}
               </div>
-              <span className="text-[11px] text-blue-600 font-semibold block">
-                {metrics.totalUsers} registered users
+              <div className="text-2xl font-bold font-mono text-slate-900">
+                {dateRange.preset === 'all' ? (
+                  <>
+                    {metrics.activeVehicles}{' '}
+                    <span className="text-xs font-normal text-slate-400">
+                      / {metrics.totalVehicles} total
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {metrics.vehiclesActiveInRange ?? 0}{' '}
+                    <span className="text-xs font-normal text-slate-400">
+                      / {metrics.activeVehicles} active
+                    </span>
+                  </>
+                )}
+              </div>
+              <span className="text-[11px] text-blue-600 font-semibold block truncate">
+                {dateRange.preset === 'all'
+                  ? `${metrics.totalUsers} registered users`
+                  : `${metrics.driversActiveInRange ?? 0} driver(s) active in period`}
               </span>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1">
-              <span className="text-xs font-medium text-slate-500">Open Anomaly Alerts</span>
+            {/* Card 4: Anomaly Alerts & Audit Integrity */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-1.5 transition-all">
+              <div className="flex items-center justify-between gap-1">
+                <span className="text-xs font-medium text-slate-500 truncate">
+                  {dateRange.preset === 'all'
+                    ? 'Open Anomaly Alerts'
+                    : dateRange.preset === 'today'
+                    ? "Today's Anomaly Alerts"
+                    : 'Anomaly Alerts'}
+                </span>
+                {dateRange.preset !== 'all' && dateRange.preset !== 'today' && (
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100 shrink-0 truncate max-w-[110px]">
+                    {dateRange.label}
+                  </span>
+                )}
+              </div>
               <div className="text-2xl font-bold font-mono text-amber-600">
                 {metrics.openAnomalies}
               </div>
-              <span className="text-[11px] text-slate-500 block">Audit integrity monitored</span>
+              <span className="text-[11px] text-slate-500 block truncate">
+                {dateRange.preset === 'all'
+                  ? 'Audit integrity monitored'
+                  : `${metrics.totalAnomaliesInRange ?? 0} flagged (${metrics.resolvedAnomaliesInRange ?? 0} resolved)`}
+              </span>
             </div>
           </div>
 
@@ -296,13 +419,15 @@ export default function ManagementDashboardPage() {
               </Link>
             </div>
 
-            {evidenceItems.length === 0 ? (
+            {filteredEvidence.length === 0 ? (
               <div className="py-6 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                No photographic evidence submitted yet. Photos captured during Daily Odometer Logs and Fuel Purchases appear here immediately.
+                {dateRange.preset !== 'all'
+                  ? `No photographic evidence submitted for the selected date window (${dateRange.label}).`
+                  : 'No photographic evidence submitted yet. Photos captured during Daily Odometer Logs and Fuel Purchases appear here immediately.'}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
-                {evidenceItems.slice(0, 8).map((item) => (
+                {filteredEvidence.slice(0, 8).map((item) => (
                   <button
                     key={item.id}
                     type="button"

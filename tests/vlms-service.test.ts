@@ -126,4 +126,62 @@ describe('VLMS Service & Business Logic', () => {
     const hasDailyLogAudit = auditLogs.some((a) => a.action === 'DAILY_LOG_SUBMITTED');
     expect(hasDailyLogAudit).toBe(true);
   });
+
+  describe('Dashboard Metrics & KPI Date Range Synchronization', () => {
+    it('should compute complete dashboard metrics when called with no date filter', async () => {
+      const metrics = await VLMSService.getDashboardMetrics();
+
+      expect(metrics).toBeDefined();
+      expect(typeof metrics.totalUsers).toBe('number');
+      expect(typeof metrics.activeStaff).toBe('number');
+      expect(typeof metrics.totalVehicles).toBe('number');
+      expect(typeof metrics.activeVehicles).toBe('number');
+      expect(typeof metrics.submittedLogs).toBe('number');
+      expect(typeof metrics.submittedToday).toBe('number');
+      expect(typeof metrics.totalFuelExpenditure).toBe('number');
+      expect(typeof metrics.openAnomalies).toBe('number');
+      expect(typeof metrics.pendingApprovals).toBe('number');
+      expect(typeof metrics.vehiclesActiveInRange).toBe('number');
+      expect(typeof metrics.driversActiveInRange).toBe('number');
+      expect(metrics.totalFuelExpenditure).toBeGreaterThanOrEqual(0);
+    });
+
+    it('should synchronize KPI metrics correctly for today filter', async () => {
+      const today = getBusinessDate();
+      const todayMetrics = await VLMSService.getDashboardMetrics({
+        startDate: today,
+        endDate: today,
+      });
+
+      expect(todayMetrics).toBeDefined();
+      expect(todayMetrics.submittedLogs).toBe(todayMetrics.submittedToday);
+      expect(todayMetrics.missingDailyLogs).toBe(
+        Math.max(0, todayMetrics.activeVehicles - todayMetrics.submittedToday)
+      );
+      expect(todayMetrics.fuelTransactionsCount).toBe(todayMetrics.fuelTransactionsToday);
+      expect(todayMetrics.totalFuelExpenditure).toBeGreaterThanOrEqual(0);
+      expect(todayMetrics.totalFuelExpenditureAllTime).toBeGreaterThanOrEqual(
+        todayMetrics.totalFuelExpenditure
+      );
+    });
+
+    it('should return zero submissions and zero expenditure for a historical date with no activity', async () => {
+      const emptyMetrics = await VLMSService.getDashboardMetrics({
+        startDate: '2020-01-01',
+        endDate: '2020-01-02',
+      });
+
+      expect(emptyMetrics).toBeDefined();
+      expect(emptyMetrics.submittedLogs).toBe(0);
+      expect(emptyMetrics.fuelTransactionsCount).toBe(0);
+      expect(emptyMetrics.totalFuelExpenditure).toBe(0);
+      expect(emptyMetrics.totalLitres).toBe(0);
+      expect(emptyMetrics.totalAnomaliesInRange).toBe(0);
+      expect(emptyMetrics.vehiclesActiveInRange).toBe(0);
+      expect(emptyMetrics.driversActiveInRange).toBe(0);
+      // Base fleet and user counts remain valid reference baselines
+      expect(emptyMetrics.totalVehicles).toBeGreaterThanOrEqual(0);
+      expect(emptyMetrics.activeVehicles).toBeGreaterThanOrEqual(0);
+    });
+  });
 });

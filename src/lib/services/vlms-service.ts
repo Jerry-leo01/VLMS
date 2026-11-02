@@ -22,6 +22,7 @@ import {
   formatMileageTravelNotification,
   formatFuelVarianceNotification,
 } from '@/lib/utils';
+import { isDateInRange } from '@/lib/date-utils';
 import { evaluateAnomalies } from '@/lib/anomaly-engine';
 
 export interface ActiveSession {
@@ -54,6 +55,28 @@ export interface EvidenceGalleryItem {
   sourceType: 'daily_log' | 'fuel_transaction';
   status: string;
   metadata?: Record<string, unknown> | null;
+}
+
+export interface DashboardMetrics {
+  totalUsers: number;
+  activeStaff: number;
+  totalVehicles: number;
+  activeVehicles: number;
+  submittedLogs: number;
+  submittedToday: number;
+  missingDailyLogs: number;
+  uniqueVehiclesLogged: number;
+  fuelTransactionsCount: number;
+  fuelTransactionsToday: number;
+  totalFuelExpenditure: number;
+  totalFuelExpenditureAllTime: number;
+  totalLitres: number;
+  openAnomalies: number;
+  totalAnomaliesInRange: number;
+  resolvedAnomaliesInRange: number;
+  vehiclesActiveInRange: number;
+  driversActiveInRange: number;
+  pendingApprovals: number;
 }
 
 interface DataStore {
@@ -1296,25 +1319,89 @@ export const VLMSService = {
   },
 
   // Management Master Dashboard Metrics
-  async getDashboardMetrics() {
+  async getDashboardMetrics(filter?: {
+    startDate?: string | null;
+    endDate?: string | null;
+  }): Promise<DashboardMetrics> {
     syncFromLocalStorage();
     const today = getBusinessDate();
     const totalUsers = store.profiles.length;
     const activeStaff = store.profiles.filter((p) => p.status === 'active').length;
     const totalVehicles = store.vehicles.length;
     const activeVehicles = store.vehicles.filter((v) => v.status === 'active').length;
+
+    const hasFilter = Boolean(filter?.startDate || filter?.endDate);
+    const isSingleDay =
+      Boolean(filter?.startDate) &&
+      Boolean(filter?.endDate) &&
+      filter?.startDate === filter?.endDate;
+    const isTodayFilter = filter?.startDate === today && filter?.endDate === today;
+
+    // Daily logs filtering
     const submittedToday = store.dailyLogs.filter((l) => l.business_date === today).length;
-    const missingDailyLogs = Math.max(0, activeVehicles - submittedToday);
+    const logsInRange = hasFilter
+      ? store.dailyLogs.filter((l) =>
+          isDateInRange(l.business_date || l.submitted_at, filter?.startDate ?? null, filter?.endDate ?? null)
+        )
+      : store.dailyLogs;
+
+    const submittedLogs = logsInRange.length;
+    const uniqueVehiclesLogged = new Set(logsInRange.map((l) => l.vehicle_id)).size;
+
+    const missingDailyLogs = isTodayFilter || (!hasFilter)
+      ? Math.max(0, activeVehicles - submittedToday)
+      : isSingleDay
+      ? Math.max(0, activeVehicles - submittedLogs)
+      : Math.max(0, activeVehicles - uniqueVehiclesLogged);
+
+    // Fuel transactions filtering
     const fuelTransactionsToday = store.fuelTransactions.filter(
       (f) => f.purchased_at.startsWith(today) || f.submitted_at.startsWith(today)
     ).length;
-    const totalFuelExpenditure = store.fuelTransactions.reduce((acc, curr) => acc + curr.amount, 0);
+    const fuelInRange = hasFilter
+      ? store.fuelTransactions.filter((f) =>
+          isDateInRange(f.purchased_at || f.submitted_at, filter?.startDate ?? null, filter?.endDate ?? null)
+        )
+      : store.fuelTransactions;
+
+    const fuelTransactionsCount = fuelInRange.length;
+    const totalFuelExpenditure = fuelInRange.reduce((acc, curr) => acc + curr.amount, 0);
+    const totalFuelExpenditureAllTime = store.fuelTransactions.reduce(
+      (acc, curr) => acc + curr.amount,
+      0
+    );
+    const totalLitres = fuelInRange.reduce((acc, curr) => acc + (curr.quantity_litres || 0), 0);
+
+    // Anomalies filtering (standardized rules only: DAILY_MILEAGE_DIFF, FUEL_PURCHASE_VARIANCE)
     const ALLOWED_NOTIFICATION_RULES = new Set(['DAILY_MILEAGE_DIFF', 'FUEL_PURCHASE_VARIANCE']);
-    const openAnomalies = store.anomalyAlerts.filter(
-      (a) =>
-        ALLOWED_NOTIFICATION_RULES.has(a.rule_code) &&
-        (a.status === 'open' || a.status === 'investigating')
-    ).length;
+    const allowedAlerts = store.anomalyAlerts.filter((a) =>
+      ALLOWED_NOTIFICATION_RULES.has(a.rule_code)
+    );
+
+    const alertsInRange = hasFilter
+      ? allowedAlerts.filter((a) =>
+          isDateInRange(a.created_at, filter?.startDate ?? null, filter?.endDate ?? null)
+        )
+      : allowedAlerts;
+
+    const openAnomalies = hasFilter
+      ? alertsInRange.filter((a) => a.status === 'open' || a.status === 'investigating').length
+      : allowedAlerts.filter((a) => a.status === 'open' || a.status === 'investigating').length;
+
+    const totalAnomaliesInRange = alertsInRange.length;
+    const resolvedAnomaliesInRange = alertsInRange.filter((a) => a.status === 'resolved').length;
+
+    // Active fleet utilization in range
+    const vehiclesActiveInRange = new Set([
+      ...logsInRange.map((l) => l.vehicle_id),
+      ...fuelInRange.map((f) => f.vehicle_id),
+    ]).size;
+
+    const driversActiveInRange = new Set([
+      ...logsInRange.map((l) => l.user_id),
+      ...fuelInRange.map((f) => f.user_id),
+    ]).size;
+
     const pendingApprovals = store.registrationRequests.filter((r) => r.status === 'pending').length;
 
     return {
@@ -1322,11 +1409,20 @@ export const VLMSService = {
       activeStaff,
       totalVehicles,
       activeVehicles,
+      submittedLogs,
       submittedToday,
       missingDailyLogs,
+      uniqueVehiclesLogged,
+      fuelTransactionsCount,
       fuelTransactionsToday,
       totalFuelExpenditure,
+      totalFuelExpenditureAllTime,
+      totalLitres,
       openAnomalies,
+      totalAnomaliesInRange,
+      resolvedAnomaliesInRange,
+      vehiclesActiveInRange,
+      driversActiveInRange,
       pendingApprovals,
     };
   },

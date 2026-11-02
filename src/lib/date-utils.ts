@@ -264,8 +264,8 @@ export function formatDateRangeLabel(selection: DateRangeSelection): string {
  */
 export function isDateInRange(
   targetDate: string | Date | null | undefined,
-  startDate: string | null,
-  endDate: string | null
+  startDate?: string | null,
+  endDate?: string | null
 ): boolean {
   if (!targetDate) return false;
   if (!startDate && !endDate) return true;
