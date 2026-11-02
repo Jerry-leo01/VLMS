@@ -9,6 +9,7 @@ import {
   formatJsonToHumanText,
   formatEvidenceMetadata,
   formatMileageTravelNotification,
+  formatFuelVarianceNotification,
   toCanonicalKm,
 } from '../src/lib/utils';
 import { RegistrationSchema, TomCardFuelSchema, PersonalFundFuelSchema } from '../src/lib/validations';
@@ -248,5 +249,22 @@ describe('Utility & Validation Tests', () => {
     // If yesterday reading was 0, traveled distance is 80.47 km
     const notification = formatMileageTravelNotification('Staff Member', 'LND-901-AA', canonicalKm);
     expect(notification).toBe('Staff Member with the plate number LND-901-AA traveled 80.47km from yesterday till today.');
+  });
+
+  it('should format standardized fuel purchase mileage variance notification adhering to strict template', () => {
+    // Template: "[User Full Name] with the plate number [User Plate Number] traveled [X]km from the last submitted log to the fuel purchase point."
+    const note1 = formatFuelVarianceNotification('Amina Yusuf', 'KJA-104-AB', 35);
+    expect(note1).toBe('Amina Yusuf with the plate number KJA-104-AB traveled 35km from the last submitted log to the fuel purchase point.');
+
+    const note2 = formatFuelVarianceNotification('Oluwaseun Bakare', 'EKY-319TN', 52.8);
+    expect(note2).toBe('Oluwaseun Bakare with the plate number EKY-319TN traveled 52.8km from the last submitted log to the fuel purchase point.');
+
+    // Anomaly text integration for FUEL_PURCHASE_VARIANCE
+    const anomalyText = formatAnomalyText('FUEL_PURCHASE_VARIANCE', {
+      userFullName: 'Babatunde Adeleke',
+      plateNumber: 'ABJ-901-XY',
+      deltaKm: 42,
+    });
+    expect(anomalyText).toBe('Babatunde Adeleke with the plate number ABJ-901-XY traveled 42km from the last submitted log to the fuel purchase point.');
   });
 });

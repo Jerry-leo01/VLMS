@@ -11,63 +11,25 @@ import { formatDateTime, formatAnomalyText } from '@/lib/utils';
 import { ArrowLeft, ShieldAlert, Info } from 'lucide-react';
 
 const STANDARD_RESOLUTION_RESPONSES = [
-  'Verified with staff member; odometer cluster was calibrated during scheduled maintenance.',
-  'Verified physical fuel purchase receipt and vendor pump meter reading.',
-  'Confirmed official business route deviation due to approved road construction/detour.',
-  'Confirmed legitimate off-hours travel with prior management authorization.',
-  'Trip meter reset verified on vehicle instrument cluster after scheduled service.',
-  'Optical sensor glitch / false positive reading confirmed after manual vehicle inspection.',
+  'Verified standard daily operational route and business mileage with staff member.',
+  'Confirmed official fuel station purchase point and valid route variance.',
+  'Reviewed and verified official errand travel prior to vehicle fueling.',
+  'Verified instrument cluster reading matches physical vehicle documentation.',
   'Others',
 ];
 
 const FLAGGING_RULES_REFERENCE = [
   {
-    code: 'ODOMETER_ROLLBACK',
-    severity: 'High',
-    trigger: 'Submitted odometer reading is lower than the last confirmed vehicle odometer reading.',
-    purpose: 'Detects accidental digit typos, trip-meter confusion, or odometer tampering.',
-  },
-  {
-    code: 'DAILY_SPIKE_EXCEEDED',
-    severity: 'Medium',
-    trigger: 'Single-day distance delta exceeds 500 km since the previous reading.',
-    purpose: 'Flags unusually high daily mileage or an extra digit entered by mistake.',
-  },
-  {
     code: 'DAILY_MILEAGE_DIFF',
-    severity: 'Notification',
+    severity: 'Low Severity',
     trigger: 'Daily odometer submission compared against the preceding recorded reading.',
-    purpose: 'Standard administrative notification tracking exact distance traveled in km from yesterday till today.',
+    purpose: 'Tracks exact distance traveled in km from yesterday till today.',
   },
   {
-    code: 'LOW_OCR_CONFIDENCE',
-    severity: 'Low',
-    trigger: 'Submitted dashboard photo yielded an OCR confidence score below 75%.',
-    purpose: 'Prompts visual review of blurry, glare-affected, or obstructed instrument cluster photos.',
-  },
-  {
-    code: 'DUPLICATE_EVIDENCE_HASH',
-    severity: 'Critical',
-    trigger: 'SHA-256 cryptographic hash of the uploaded image matches a previously submitted photo.',
-    purpose: 'Prevents reuse of old odometer or fuel receipt photographs across multiple submissions.',
-  },
-  {
-    code: 'EXIF_TIMESTAMP_STALE',
-    severity: 'Medium',
-    trigger: 'Photo capture timestamp is more than 24 hours older than the submission time.',
-    purpose: 'Ensures photographic evidence is captured live at the time of logging.',
-  },
-  {
-    code: 'FUEL_CAPACITY_EXCEEDED',
-    severity: 'High',
-    trigger: 'Fuel purchase volume exceeds the vehicle fuel tank capacity (> 100 Litres).',
-    purpose: 'Detects external jerrycan fueling or decimal-point OCR/entry errors.',
-  },
-  {
-    code: 'TOM_VENDOR_POLICY_VIOLATION',
-    severity: 'High',
-    trigger: 'TOM corporate card used at a non-TotalEnergies filling station.',
-    purpose: 'Enforces corporate fleet fuel card vendor compliance.',
+    code: 'FUEL_PURCHASE_VARIANCE',
+    severity: 'Low Severity',
+    trigger: 'Fuel purchase odometer reading compared against the verified daily log reading.',
+    purpose: 'Captures the precise distance traveled between the last submitted log and the fuel purchase point.',
   },
 ];
 
@@ -145,7 +107,7 @@ export default function AnomalyManagementPage() {
               <div>
                 <h1 className="text-xl font-bold text-slate-900">Odometer & Fuel Anomaly Review Queue</h1>
                 <p className="text-xs text-slate-500">
-                  Explainable rules-based alerts for odometer decreases, distance spikes, and photo verification
+                  Exclusive standardized operational notifications for daily travel distance and fuel purchase mileage variance
                 </p>
               </div>
             </div>
@@ -158,7 +120,7 @@ export default function AnomalyManagementPage() {
                 className="px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg text-xs font-semibold text-slate-700 flex items-center gap-1.5 shadow-sm"
               >
                 <Info className="w-3.5 h-3.5 text-blue-600" />
-                <span>{showRulesGuide ? 'Hide Flagging Rules Logic' : 'Why Are Items Flagged?'}</span>
+                <span>{showRulesGuide ? 'Hide Notification Rules' : 'Active Notification Rules'}</span>
               </button>
               <span className="text-xs text-slate-500 font-medium">Filter Status:</span>
               <select
@@ -180,10 +142,10 @@ export default function AnomalyManagementPage() {
             <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">
-                  Automated Flagging & Anomaly Detection Rules (8-Rule Audit Engine)
+                  Standardized Operational Notification Rules (Exclusive 2-Rule Policy)
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Every daily odometer log and fuel purchase submission is evaluated against these 8 deterministic rules. Any violation automatically marks the submission as <strong>FLAGGED</strong> and creates an explainable alert below.
+                  The admin queue exclusively monitors two standardized operational notification types. All secondary alerts and automated OCR flags have been discarded:
                 </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">

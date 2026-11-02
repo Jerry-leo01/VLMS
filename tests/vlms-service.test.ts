@@ -57,6 +57,13 @@ describe('VLMS Service & Business Logic', () => {
     const second = await VLMSService.submitFuelTransaction(txInput);
 
     expect(first.transaction.id).toBe(second.transaction.id);
+
+    // Verify FUEL_PURCHASE_VARIANCE notification alert generated
+    const fuelAlert = first.anomalies.find((a) => a.rule_code === 'FUEL_PURCHASE_VARIANCE');
+    expect(fuelAlert).toBeDefined();
+    expect(fuelAlert?.severity).toBe('low');
+    expect(fuelAlert?.details.deltaKm).toBe(50); // 46,250 - 46,200 = 50 km
+    expect(fuelAlert?.details.notification).toContain('traveled 50km from the last submitted log to the fuel purchase point.');
   });
 
   it('should process registration request and approve user into active status', async () => {

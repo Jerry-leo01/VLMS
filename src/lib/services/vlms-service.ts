@@ -15,7 +15,13 @@ import {
   VehicleStatus,
   EvidenceType,
 } from '@/types/database';
-import { getBusinessDate, normalizePlateNumber, toCanonicalKm, formatMileageTravelNotification } from '@/lib/utils';
+import {
+  getBusinessDate,
+  normalizePlateNumber,
+  toCanonicalKm,
+  formatMileageTravelNotification,
+  formatFuelVarianceNotification,
+} from '@/lib/utils';
 import { evaluateAnomalies } from '@/lib/anomaly-engine';
 
 export interface ActiveSession {
@@ -762,14 +768,14 @@ export const VLMSService = {
       latitude: input.latitude ?? null,
       longitude: input.longitude ?? null,
       gps_accuracy_m: input.gpsAccuracyM ?? null,
-      status: detected.length > 0 ? 'flagged' : 'submitted',
+      status: 'submitted',
       submitted_at: new Date().toISOString(),
       created_at: new Date().toISOString(),
     };
 
     store.dailyLogs.push(newLog);
 
-    // Standardized Administrative Alerts: add daily mileage difference notification alert
+    // Standardized Administrative Alerts: DAILY_MILEAGE_DIFF is the exclusive daily log alert
     const generatedAlerts: AnomalyAlert[] = [];
     const mileageAlert: AnomalyAlert = {
       id: `alert-${Date.now()}-mileage-${Math.random().toString(36).substring(7)}`,
@@ -796,24 +802,6 @@ export const VLMSService = {
     };
     store.anomalyAlerts.unshift(mileageAlert);
     generatedAlerts.push(mileageAlert);
-    for (const d of detected) {
-      const alert: AnomalyAlert = {
-        id: `alert-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-        vehicle_id: input.vehicleId,
-        daily_log_id: newLogId,
-        fuel_transaction_id: null,
-        rule_code: d.ruleCode,
-        severity: d.severity,
-        status: 'open',
-        details: d.details,
-        reviewer_id: null,
-        resolution_note: null,
-        created_at: new Date().toISOString(),
-        resolved_at: null,
-      };
-      store.anomalyAlerts.push(alert);
-      generatedAlerts.push(alert);
-    }
 
     // Append-only Audit Trail
     store.auditEvents.push({
@@ -845,6 +833,8 @@ export const VLMSService = {
     tomCardId?: string | null;
     vendorName: string;
     odometerKm: number;
+    sourceUnit?: 'km' | 'mi';
+    sourceReading?: number | null;
     odometerEvidenceId: string;
     receiptEvidenceId: string;
     amount: number;
@@ -872,21 +862,30 @@ export const VLMSService = {
       );
     }
 
-    if (input.odometerKm < todayLog.odometer_km) {
+    const sourceUnit = input.sourceUnit ?? 'km';
+    const rawSourceReading = input.sourceReading ?? input.odometerKm;
+    // Pre-calculate canonical KM using standard factor 1.60934 if submitted in miles
+    const canonicalFuelKm =
+      sourceUnit === 'mi'
+        ? toCanonicalKm(rawSourceReading, 'mi')
+        : Math.round(input.odometerKm * 100) / 100;
+
+    if (canonicalFuelKm < todayLog.odometer_km) {
       throw new Error(
-        `Fuel purchase odometer reading (${input.odometerKm} km) cannot be lower than today's verified daily log reading (${todayLog.odometer_km} km).`
+        `Fuel purchase odometer reading (${canonicalFuelKm} km) cannot be lower than today's verified daily log reading (${todayLog.odometer_km} km).`
       );
     }
 
-    const previousKm = todayLog.odometer_km;
+    // Calculate variance from last submitted daily log to fuel purchase point
+    const deltaKm = Math.max(0, Math.round((canonicalFuelKm - todayLog.odometer_km) * 100) / 100);
 
-    // Anomaly evaluation
-    const detected = evaluateAnomalies({
-      currentKm: input.odometerKm,
-      previousKm,
-      paymentMethod: input.paymentMethod,
-      hasReceiptEvidence: Boolean(input.receiptEvidenceId),
-    });
+    const user =
+      (await this.getStaffProfile(input.userId)) ||
+      store.profiles.find((p) => p.id === input.userId);
+    const vehicle = store.vehicles.find((v) => v.id === input.vehicleId);
+    const userFullName = user?.full_name || 'Staff Member';
+    const plateNumber = vehicle?.plate_number || 'Unknown Vehicle';
+    const varianceNotification = formatFuelVarianceNotification(userFullName, plateNumber, deltaKm);
 
     const newTxId = `fuel-${Date.now()}`;
     const newTx: FuelTransaction = {
@@ -897,7 +896,10 @@ export const VLMSService = {
       payment_method: input.paymentMethod,
       tom_card_id: input.tomCardId ?? null,
       vendor_name: input.vendorName,
-      odometer_km: input.odometerKm,
+      odometer_km: canonicalFuelKm,
+      source_unit: sourceUnit,
+      source_reading: rawSourceReading,
+      canonical_reading_km: canonicalFuelKm,
       odometer_evidence_id: input.odometerEvidenceId,
       receipt_evidence_id: input.receiptEvidenceId,
       amount: input.amount,
@@ -905,32 +907,39 @@ export const VLMSService = {
       quantity_litres: input.quantityLitres,
       purchased_at: input.purchasedAt,
       submitted_at: new Date().toISOString(),
-      status: detected.length > 0 ? 'flagged' : 'submitted',
+      status: 'submitted',
       idempotency_key: input.idempotencyKey,
     };
 
     store.fuelTransactions.push(newTx);
 
-    // Record anomalies if any
+    // Standardized Administrative Alerts: FUEL_PURCHASE_VARIANCE is the exclusive fuel alert
     const generatedAlerts: AnomalyAlert[] = [];
-    for (const d of detected) {
-      const alert: AnomalyAlert = {
-        id: `alert-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-        vehicle_id: input.vehicleId,
-        daily_log_id: input.dailyLogId ?? todayLog.id,
-        fuel_transaction_id: newTxId,
-        rule_code: d.ruleCode,
-        severity: d.severity,
-        status: 'open',
-        details: d.details,
-        reviewer_id: null,
-        resolution_note: null,
-        created_at: new Date().toISOString(),
-        resolved_at: null,
-      };
-      store.anomalyAlerts.push(alert);
-      generatedAlerts.push(alert);
-    }
+    const fuelAlert: AnomalyAlert = {
+      id: `alert-${Date.now()}-fuel-${Math.random().toString(36).substring(7)}`,
+      vehicle_id: input.vehicleId,
+      daily_log_id: input.dailyLogId ?? todayLog.id,
+      fuel_transaction_id: newTxId,
+      rule_code: 'FUEL_PURCHASE_VARIANCE',
+      severity: 'low',
+      status: 'open',
+      details: {
+        userFullName,
+        plateNumber,
+        lastLogKm: todayLog.odometer_km,
+        fuelKm: canonicalFuelKm,
+        deltaKm,
+        notification: varianceNotification,
+        sourceUnit,
+        sourceReading: rawSourceReading,
+      },
+      reviewer_id: null,
+      resolution_note: null,
+      created_at: new Date().toISOString(),
+      resolved_at: null,
+    };
+    store.anomalyAlerts.unshift(fuelAlert);
+    generatedAlerts.push(fuelAlert);
 
     // Append-only Audit Trail
     store.auditEvents.push({
@@ -1300,8 +1309,11 @@ export const VLMSService = {
       (f) => f.purchased_at.startsWith(today) || f.submitted_at.startsWith(today)
     ).length;
     const totalFuelExpenditure = store.fuelTransactions.reduce((acc, curr) => acc + curr.amount, 0);
+    const ALLOWED_NOTIFICATION_RULES = new Set(['DAILY_MILEAGE_DIFF', 'FUEL_PURCHASE_VARIANCE']);
     const openAnomalies = store.anomalyAlerts.filter(
-      (a) => a.status === 'open' || a.status === 'investigating'
+      (a) =>
+        ALLOWED_NOTIFICATION_RULES.has(a.rule_code) &&
+        (a.status === 'open' || a.status === 'investigating')
     ).length;
     const pendingApprovals = store.registrationRequests.filter((r) => r.status === 'pending').length;
 
@@ -1349,8 +1361,9 @@ export const VLMSService = {
 
   async getAllAnomalies(): Promise<AnomalyAlert[]> {
     syncFromLocalStorage();
+    const ALLOWED_NOTIFICATION_RULES = new Set(['DAILY_MILEAGE_DIFF', 'FUEL_PURCHASE_VARIANCE']);
     return store.anomalyAlerts
-      .slice()
+      .filter((alert) => ALLOWED_NOTIFICATION_RULES.has(alert.rule_code))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .map((alert) => {
         const vehicle = store.vehicles.find((v) => v.id === alert.vehicle_id);

@@ -101,7 +101,7 @@ export default function ManagementDashboardPage() {
 
   const latestMileageAlerts = anomalies.filter(
     (a) =>
-      a.rule_code === 'DAILY_MILEAGE_DIFF' &&
+      (a.rule_code === 'DAILY_MILEAGE_DIFF' || a.rule_code === 'FUEL_PURCHASE_VARIANCE') &&
       isDateInRange(a.created_at, dateRange.startDate, dateRange.endDate)
   );
 
@@ -186,9 +186,9 @@ export default function ManagementDashboardPage() {
               <div className="flex items-center gap-3 text-xs text-red-900">
                 <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
                 <div>
-                  <strong>{metrics.openAnomalies} Open Odometer / Fuel Anomaly Alerts</strong>
+                  <strong>{metrics.openAnomalies} Open Operational Anomaly Alerts</strong>
                   <p className="text-red-800">
-                    Entries flagged by deterministic rules (odometer decrease, high daily distance, low OCR confidence, or duplicate photo).
+                    Entries flagged by standardized operational rules (Daily Mileage Difference and Fuel Purchase Variance).
                   </p>
                 </div>
               </div>
@@ -201,18 +201,18 @@ export default function ManagementDashboardPage() {
             </div>
           )}
 
-          {/* Daily Mileage Comparison Alerts Feed */}
+          {/* Daily Mileage & Fuel Purchase Variance Alerts Feed */}
           {latestMileageAlerts.length > 0 && (
             <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-4 shadow-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5 uppercase tracking-wider">
                   <Gauge className="w-4 h-4 text-blue-600" />
-                  Daily Mileage Comparison Alerts
+                  Daily Mileage & Fuel Purchase Variance Alerts
                 </span>
-                <span className="text-[11px] text-blue-700 font-medium">Standardized Notifications</span>
+                <span className="text-[11px] text-blue-700 font-medium">Standardized Feed</span>
               </div>
               <div className="space-y-1.5">
-                {latestMileageAlerts.slice(0, 3).map((a) => (
+                {latestMileageAlerts.slice(0, 4).map((a) => (
                   <div
                     key={a.id}
                     className="p-2.5 bg-white rounded-lg border border-blue-100 text-xs text-slate-800 font-medium flex items-center justify-between shadow-2xs"

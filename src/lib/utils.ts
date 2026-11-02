@@ -80,6 +80,24 @@ export function formatMileageTravelNotification(
 }
 
 /**
+ * Generates the standardized fuel purchase mileage variance notification string.
+ * Template: "[User Full Name] with the plate number [User Plate Number] traveled [X]km from the last submitted log to the fuel purchase point."
+ */
+export function formatFuelVarianceNotification(
+  userFullName: string,
+  plateNumber: string,
+  deltaKm: number
+): string {
+  const safeDelta = Math.max(0, isNaN(deltaKm) ? 0 : deltaKm);
+  const rounded = Math.round(safeDelta * 100) / 100;
+  const formattedDistance = Number.isInteger(rounded)
+    ? rounded.toLocaleString('en-US')
+    : rounded.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+
+  return `${userFullName} with the plate number ${plateNumber} traveled ${formattedDistance}km from the last submitted log to the fuel purchase point.`;
+}
+
+/**
  * Formats odometer numbers with km or mi unit
  */
 export function formatOdometer(reading: number | null | undefined, unit: 'km' | 'mi' = 'km'): string {
@@ -319,6 +337,15 @@ export function formatAnomalyText(ruleCode: string, details?: Record<string, unk
         return d.notification;
       }
       return formatMileageTravelNotification(
+        String(d.userFullName || 'Staff Member'),
+        String(d.plateNumber || 'Vehicle'),
+        Number(d.deltaKm || 0)
+      );
+    case 'FUEL_PURCHASE_VARIANCE':
+      if (typeof d.notification === 'string' && d.notification.length > 0) {
+        return d.notification;
+      }
+      return formatFuelVarianceNotification(
         String(d.userFullName || 'Staff Member'),
         String(d.plateNumber || 'Vehicle'),
         Number(d.deltaKm || 0)
