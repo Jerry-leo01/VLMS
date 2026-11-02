@@ -34,10 +34,10 @@ const FLAGGING_RULES_REFERENCE = [
     purpose: 'Flags unusually high daily mileage or an extra digit entered by mistake.',
   },
   {
-    code: 'OCR_MANUAL_MISMATCH',
-    severity: 'Low / Medium',
-    trigger: 'Confirmed odometer reading differs from the AI OCR reading by > 2% (or > 10% for Medium).',
-    purpose: 'Highlights manual overrides of high-confidence optical character recognition readings.',
+    code: 'DAILY_MILEAGE_DIFF',
+    severity: 'Notification',
+    trigger: 'Daily odometer submission compared against the preceding recorded reading.',
+    purpose: 'Standard administrative notification tracking exact distance traveled in km from yesterday till today.',
   },
   {
     code: 'LOW_OCR_CONFIDENCE',

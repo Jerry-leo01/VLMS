@@ -8,6 +8,8 @@ import {
   formatAnomalyText,
   formatJsonToHumanText,
   formatEvidenceMetadata,
+  formatMileageTravelNotification,
+  toCanonicalKm,
 } from '../src/lib/utils';
 import { RegistrationSchema, TomCardFuelSchema, PersonalFundFuelSchema } from '../src/lib/validations';
 
@@ -219,5 +221,32 @@ describe('Utility & Validation Tests', () => {
     expect(metadataFields.some((f) => f.label === 'Confirmed Reading' && f.value === '91,308 km')).toBe(true);
     expect(metadataFields.some((f) => f.label === 'Measurement Unit' && f.value === 'Miles (Imperial)')).toBe(true);
     expect(metadataFields.some((f) => f.label === 'Filling Station / Vendor' && f.value.includes('TOTAL ENERGIES'))).toBe(true);
+  });
+
+  it('should format standardized daily mileage travel notification adhering to strict template', () => {
+    // Template: "[User Full Name] with the plate number [User Plate Number] traveled [X]km from yesterday till today."
+    const note1 = formatMileageTravelNotification('Amina Yusuf', 'KJA-104-AB', 84);
+    expect(note1).toBe('Amina Yusuf with the plate number KJA-104-AB traveled 84km from yesterday till today.');
+
+    const note2 = formatMileageTravelNotification('Oluwaseun Bakare', 'EKY-319TN', 142.5);
+    expect(note2).toBe('Oluwaseun Bakare with the plate number EKY-319TN traveled 142.5km from yesterday till today.');
+
+    // Anomaly text integration
+    const anomalyText = formatAnomalyText('DAILY_MILEAGE_DIFF', {
+      userFullName: 'John Doe',
+      plateNumber: 'ABC-123-XY',
+      deltaKm: 120,
+    });
+    expect(anomalyText).toBe('John Doe with the plate number ABC-123-XY traveled 120km from yesterday till today.');
+  });
+
+  it('should pre-convert miles to kilometers using 1.60934 factor before computing difference', () => {
+    // 50 miles = 50 * 1.60934 = 80.467 -> 80.47 km
+    const canonicalKm = toCanonicalKm(50, 'mi');
+    expect(canonicalKm).toBe(80.47);
+
+    // If yesterday reading was 0, traveled distance is 80.47 km
+    const notification = formatMileageTravelNotification('Staff Member', 'LND-901-AA', canonicalKm);
+    expect(notification).toBe('Staff Member with the plate number LND-901-AA traveled 80.47km from yesterday till today.');
   });
 });

@@ -89,7 +89,10 @@ export function evaluateAnomalies(input: AnomalyEvaluationInput): DetectedAnomal
     });
   }
 
-  // 5. OCR_MANUAL_MISMATCH: User-confirmed reading differs significantly from OCR
+  // 5. OCR_MANUAL_MISMATCH: [DISABLED per requirements]
+  // Automated cross-referencing between OCR-detected reading and manual meter entry is disabled.
+  // Readings are accepted without generating discrepancy flags based on OCR vs manual comparison.
+  /*
   if (input.ocrProposedKm !== undefined && input.ocrProposedKm !== null) {
     const ocrDiff = Math.abs(input.currentKm - input.ocrProposedKm);
     if (ocrDiff > 10) {
@@ -106,6 +109,7 @@ export function evaluateAnomalies(input: AnomalyEvaluationInput): DetectedAnomal
       });
     }
   }
+  */
 
   // 6. DUPLICATE_EVIDENCE: Hash matches an unrelated submission
   if (input.evidenceHash && input.existingEvidenceHashes && input.existingEvidenceHashes.includes(input.evidenceHash)) {

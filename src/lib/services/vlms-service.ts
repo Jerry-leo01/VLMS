@@ -15,7 +15,7 @@ import {
   VehicleStatus,
   EvidenceType,
 } from '@/types/database';
-import { getBusinessDate, normalizePlateNumber } from '@/lib/utils';
+import { getBusinessDate, normalizePlateNumber, toCanonicalKm, formatMileageTravelNotification } from '@/lib/utils';
 import { evaluateAnomalies } from '@/lib/anomaly-engine';
 
 export interface ActiveSession {
@@ -699,7 +699,29 @@ export const VLMSService = {
       );
     }
 
+    const sourceUnit = input.sourceUnit ?? 'km';
+    const rawSourceReading = input.sourceReading ?? input.odometerKm;
+    // Step 1: Pre-calculation unit conversion layer (1 mi = 1.60934 km) before daily difference calculation
+    const canonicalKm =
+      sourceUnit === 'mi'
+        ? toCanonicalKm(rawSourceReading, 'mi')
+        : Math.round(input.odometerKm * 100) / 100;
+
+    // Step 2: Retrieve previous recorded reading and calculate daily mileage difference
     const previousKm = await this.getLatestOdometer(input.vehicleId);
+    const deltaKm =
+      previousKm !== undefined
+        ? Math.max(0, Math.round((canonicalKm - previousKm) * 100) / 100)
+        : 0;
+
+    // Step 3: Retrieve user and vehicle to construct standardized travel notification string
+    const user =
+      (await this.getStaffProfile(input.userId)) ||
+      store.profiles.find((p) => p.id === input.userId);
+    const vehicle = store.vehicles.find((v) => v.id === input.vehicleId);
+    const userFullName = user?.full_name || 'Staff Member';
+    const plateNumber = vehicle?.plate_number || 'Unknown Vehicle';
+    const travelNotification = formatMileageTravelNotification(userFullName, plateNumber, deltaKm);
 
     // Check if evidence SHA256 hash is duplicated across previous evidence files
     const currentEv = store.evidenceFiles.find((e) => e.id === input.evidenceId);
@@ -707,9 +729,9 @@ export const VLMSService = {
       .filter((e) => e.id !== input.evidenceId)
       .map((e) => e.sha256_hash);
 
-    // Run Anomaly Detection Engine
+    // Run Anomaly Detection Engine (with pre-converted canonical KM)
     const detected = evaluateAnomalies({
-      currentKm: input.odometerKm,
+      currentKm: canonicalKm,
       previousKm,
       ocrProposedKm: input.ocrReadingKm,
       ocrConfidence: input.ocrConfidence,
@@ -725,11 +747,13 @@ export const VLMSService = {
       vehicle_id: input.vehicleId,
       user_id: input.userId,
       business_date: today,
-      odometer_km: input.odometerKm,
+      odometer_km: canonicalKm,
       raw_odometer_text: input.rawOdometerText ?? null,
-      source_unit: input.sourceUnit ?? 'km',
-      source_reading: input.sourceReading ?? input.odometerKm,
-      canonical_reading_km: input.odometerKm,
+      source_unit: sourceUnit,
+      source_reading: rawSourceReading,
+      canonical_reading_km: canonicalKm,
+      mileage_difference_km: deltaKm,
+      travel_notification: travelNotification,
       location_name: input.locationName ?? null,
       ocr_reading_km: input.ocrReadingKm ?? null,
       ocr_confidence: input.ocrConfidence ?? null,
@@ -745,8 +769,33 @@ export const VLMSService = {
 
     store.dailyLogs.push(newLog);
 
-    // Save generated anomalies
+    // Standardized Administrative Alerts: add daily mileage difference notification alert
     const generatedAlerts: AnomalyAlert[] = [];
+    const mileageAlert: AnomalyAlert = {
+      id: `alert-${Date.now()}-mileage-${Math.random().toString(36).substring(7)}`,
+      vehicle_id: input.vehicleId,
+      daily_log_id: newLogId,
+      fuel_transaction_id: null,
+      rule_code: 'DAILY_MILEAGE_DIFF',
+      severity: 'low',
+      status: 'open',
+      details: {
+        userFullName,
+        plateNumber,
+        previousKm: previousKm ?? canonicalKm,
+        currentKm: canonicalKm,
+        deltaKm,
+        notification: travelNotification,
+        sourceUnit,
+        sourceReading: rawSourceReading,
+      },
+      reviewer_id: null,
+      resolution_note: null,
+      created_at: new Date().toISOString(),
+      resolved_at: null,
+    };
+    store.anomalyAlerts.unshift(mileageAlert);
+    generatedAlerts.push(mileageAlert);
     for (const d of detected) {
       const alert: AnomalyAlert = {
         id: `alert-${Date.now()}-${Math.random().toString(36).substring(7)}`,

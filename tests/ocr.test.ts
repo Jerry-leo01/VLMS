@@ -35,8 +35,8 @@ describe('OCR Odometer Number Extractor', () => {
     const details = extractOdometerDetails(rawMilesCluster);
     expect(details.proposedReading).toBe(48210);
     expect(details.detectedUnit).toBe('mi');
-    // 48210 * 1.609344 = 77586.47424 -> 77586.47
-    expect(details.canonicalKm).toBe(77586.47);
+    // 48210 * 1.60934 = 77586.2814 -> 77586.28
+    expect(details.canonicalKm).toBe(77586.28);
   });
 
   it('should accurately resolve LCD odometer cluster with ODO 123456 and MPH dial', () => {
@@ -47,8 +47,8 @@ describe('OCR Odometer Number Extractor', () => {
     const details = extractOdometerDetails(clusterSample);
     expect(details.proposedReading).toBe(123456);
     expect(details.detectedUnit).toBe('mi');
-    // 123456 * 1.609344 = 198683.173248 -> 198683.17
-    expect(details.canonicalKm).toBe(198683.17);
+    // 123456 * 1.60934 = 198682.6824 -> 198682.68
+    expect(details.canonicalKm).toBe(198682.68);
   });
 
   it('should accurately resolve 7-segment LCD OCR artifacts (0D0 123456)', () => {
@@ -82,11 +82,11 @@ describe('OCR Odometer Number Extractor', () => {
 });
 
 describe('Odometer Unit Management & Precision Conversion', () => {
-  it('should accurately convert Miles to KM using high-precision factor 1.609344', () => {
-    // 100 miles = 160.9344 km -> rounded to 160.93
+  it('should accurately convert Miles to KM using standard factor 1.60934', () => {
+    // 100 miles = 160.934 km -> rounded to 160.93
     expect(convertOdometerReading(100, 'mi', 'km')).toBe(160.93);
-    // 57,612 miles = 92,717.53 km
-    expect(toCanonicalKm(57612, 'mi')).toBe(92717.53);
+    // 57,612 miles * 1.60934 = 92,717.30688 -> 92,717.3 km
+    expect(toCanonicalKm(57612, 'mi')).toBe(92717.3);
     // 57,612 km = 57,612 km
     expect(toCanonicalKm(57612, 'km')).toBe(57612);
   });
@@ -97,9 +97,9 @@ describe('Odometer Unit Management & Precision Conversion', () => {
     const km1 = toCanonicalKm(sourceReading, 'mi');
     const km2 = toCanonicalKm(sourceReading, 'mi');
     const km3 = toCanonicalKm(sourceReading, 'mi');
-    expect(km1).toBe(92717.53);
-    expect(km2).toBe(92717.53);
-    expect(km3).toBe(92717.53);
+    expect(km1).toBe(92717.3);
+    expect(km2).toBe(92717.3);
+    expect(km3).toBe(92717.3);
   });
 });
 

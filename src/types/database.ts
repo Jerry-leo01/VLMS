@@ -148,6 +148,8 @@ export interface DailyLog {
   source_unit?: OdometerUnit;
   source_reading?: number | null;
   canonical_reading_km?: number | null;
+  mileage_difference_km?: number | null;
+  travel_notification?: string | null;
   location_name?: string | null;
   ocr_reading_km: number | null;
   ocr_confidence: number | null;

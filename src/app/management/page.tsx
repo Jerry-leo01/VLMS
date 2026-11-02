@@ -26,6 +26,7 @@ import {
   Hash,
   X,
   KeyRound,
+  Gauge,
 } from 'lucide-react';
 import { AdminTotpGeneratorModal } from '@/components/admin/AdminTotpGeneratorModal';
 
@@ -85,6 +86,8 @@ export default function ManagementDashboardPage() {
 
   const getLogAnomalies = (logId: string) =>
     anomalies.filter((a) => a.daily_log_id === logId);
+
+  const latestMileageAlerts = anomalies.filter((a) => a.rule_code === 'DAILY_MILEAGE_DIFF');
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -164,7 +167,7 @@ export default function ManagementDashboardPage() {
                 <div>
                   <strong>{metrics.openAnomalies} Open Odometer / Fuel Anomaly Alerts</strong>
                   <p className="text-red-800">
-                    Entries flagged by deterministic rules (odometer decrease, low OCR confidence, manual override mismatch, or duplicate photo).
+                    Entries flagged by deterministic rules (odometer decrease, high daily distance, low OCR confidence, or duplicate photo).
                   </p>
                 </div>
               </div>
@@ -174,6 +177,32 @@ export default function ManagementDashboardPage() {
               >
                 Inspect Alerts
               </Link>
+            </div>
+          )}
+
+          {/* Daily Mileage Comparison Alerts Feed */}
+          {latestMileageAlerts.length > 0 && (
+            <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-4 shadow-xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-blue-900 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Gauge className="w-4 h-4 text-blue-600" />
+                  Daily Mileage Comparison Alerts
+                </span>
+                <span className="text-[11px] text-blue-700 font-medium">Standardized Notifications</span>
+              </div>
+              <div className="space-y-1.5">
+                {latestMileageAlerts.slice(0, 3).map((a) => (
+                  <div
+                    key={a.id}
+                    className="p-2.5 bg-white rounded-lg border border-blue-100 text-xs text-slate-800 font-medium flex items-center justify-between shadow-2xs"
+                  >
+                    <span>{formatAnomalyText(a.rule_code, a.details)}</span>
+                    <span className="text-[11px] font-mono text-slate-500 shrink-0 ml-2">
+                      {formatDateTime(a.created_at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

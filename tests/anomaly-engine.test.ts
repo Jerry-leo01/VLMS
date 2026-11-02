@@ -44,7 +44,7 @@ describe('Anomaly Detection Engine', () => {
     expect(ocrAlert?.severity).toBe('low');
   });
 
-  it('should detect OCR_MANUAL_MISMATCH when user confirmed value differs from OCR proposal by > 10 km', () => {
+  it('should not flag OCR_MANUAL_MISMATCH when user confirmed value differs from OCR proposal (automated OCR flagging disabled)', () => {
     const alerts = evaluateAnomalies({
       currentKm: 50100,
       previousKm: 49900,
@@ -52,8 +52,7 @@ describe('Anomaly Detection Engine', () => {
       ocrConfidence: 95,
     });
     const mismatchAlert = alerts.find((a) => a.ruleCode === 'OCR_MANUAL_MISMATCH');
-    expect(mismatchAlert).toBeDefined();
-    expect(mismatchAlert?.severity).toBe('medium');
+    expect(mismatchAlert).toBeUndefined();
   });
 
   it('should detect DUPLICATE_EVIDENCE when hash exists in prior submissions', () => {

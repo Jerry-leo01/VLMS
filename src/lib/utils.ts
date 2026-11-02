@@ -30,12 +30,12 @@ export function formatCurrency(amount: number, currency: string = 'NGN'): string
 }
 
 /**
- * High precision conversion factor: 1 international mile = 1.609344 km
+ * Standard conversion factor: 1 international mile = 1.60934 kilometers
  */
-export const MILES_TO_KM = 1.609344;
+export const MILES_TO_KM = 1.60934;
 
 /**
- * Converts odometer reading between units with high precision (1 mi = 1.609344 km).
+ * Converts odometer reading between units using standard conversion factor (1 mi = 1.60934 km).
  * Rounds result to 2 decimal places to avoid floating point drift.
  */
 export function convertOdometerReading(reading: number, fromUnit: 'km' | 'mi', toUnit: 'km' | 'mi'): number {
@@ -52,12 +52,31 @@ export function convertOdometerReading(reading: number, fromUnit: 'km' | 'mi', t
 
 /**
  * Calculates canonical odometer reading in Kilometres (KM) from source reading and source unit.
+ * Uses standard conversion rate (1 mi = 1.60934 km).
  */
 export function toCanonicalKm(sourceReading: number, sourceUnit: 'km' | 'mi'): number {
   if (isNaN(sourceReading) || sourceReading < 0) return 0;
   return sourceUnit === 'mi'
     ? Math.round(sourceReading * MILES_TO_KM * 100) / 100
-    : sourceReading;
+    : Math.round(sourceReading * 100) / 100;
+}
+
+/**
+ * Generates the standardized daily mileage comparison notification string.
+ * Template: "[User Full Name] with the plate number [User Plate Number] traveled [X]km from yesterday till today."
+ */
+export function formatMileageTravelNotification(
+  userFullName: string,
+  plateNumber: string,
+  deltaKm: number
+): string {
+  const safeDelta = Math.max(0, isNaN(deltaKm) ? 0 : deltaKm);
+  const rounded = Math.round(safeDelta * 100) / 100;
+  const formattedDistance = Number.isInteger(rounded)
+    ? rounded.toLocaleString('en-US')
+    : rounded.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+
+  return `${userFullName} with the plate number ${plateNumber} traveled ${formattedDistance}km from yesterday till today.`;
 }
 
 /**
@@ -295,6 +314,15 @@ export function formatAuditActionText(
 export function formatAnomalyText(ruleCode: string, details?: Record<string, unknown> | null): string {
   const d = details || {};
   switch (ruleCode) {
+    case 'DAILY_MILEAGE_DIFF':
+      if (typeof d.notification === 'string' && d.notification.length > 0) {
+        return d.notification;
+      }
+      return formatMileageTravelNotification(
+        String(d.userFullName || 'Staff Member'),
+        String(d.plateNumber || 'Vehicle'),
+        Number(d.deltaKm || 0)
+      );
     case 'ODO_DECREASE':
       return `Reported odometer reading (${formatOdometer(Number(d.currentKm))}) is ${Math.abs(
         Number(d.difference || 0)

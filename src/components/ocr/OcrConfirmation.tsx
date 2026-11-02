@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { processOdometerImage, OcrResult } from '@/lib/ocr/processor';
 import { toCanonicalKm, formatOdometer, MILES_TO_KM } from '@/lib/utils';
 import { OdometerUnit } from '@/types/database';
-import { Eye, CheckCircle2, AlertTriangle, Sparkles, Loader2, Gauge, RefreshCw } from 'lucide-react';
+import { Eye, CheckCircle2, Sparkles, Loader2, Gauge, RefreshCw } from 'lucide-react';
 
 interface OcrConfirmationProps {
   imageSrc: string;
@@ -60,15 +60,11 @@ export function OcrConfirmation({ imageSrc, roiImageSrc, onConfirmed }: OcrConfi
     numericReading >= 0 &&
     !sanitizedInput.endsWith('.');
 
-  // High-precision canonical calculation (1 mile = 1.609344 km) without cumulative drift
+  // High-precision canonical calculation (1 mile = 1.60934 km) without cumulative drift
   const canonicalKm = isValidNumber ? toCanonicalKm(numericReading, sourceUnit) : 0;
 
-  // Calculate mismatch against canonical proposed KM
-  const isMismatch =
-    ocrData?.proposedReading !== null &&
-    ocrData?.proposedReading !== undefined &&
-    isValidNumber &&
-    Math.abs(numericReading - ocrData.proposedReading) > 10;
+  // Note: Automated OCR vs manual meter mismatch flagging has been disabled per requirements.
+  // Readings are accepted directly without generating discrepancy warnings or flags.
 
   const handleUnitToggle = (newUnit: OdometerUnit) => {
     if (newUnit === sourceUnit) return;
@@ -241,15 +237,6 @@ export function OcrConfirmation({ imageSrc, roiImageSrc, onConfirmed }: OcrConfi
             </div>
           )}
 
-          {/* Optical Mismatch Warning */}
-          {isMismatch && (
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-              <span>
-                Your confirmed reading ({numericReading.toLocaleString()} {sourceUnit.toUpperCase()}) differs from the OCR result. This entry will be flagged for routine supervisory review, but submission will proceed.
-              </span>
-            </div>
-          )}
 
           <div className="space-y-2">
             <button
