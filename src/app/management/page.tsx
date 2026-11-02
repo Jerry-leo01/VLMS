@@ -27,8 +27,12 @@ import {
   X,
   KeyRound,
   Gauge,
+  RotateCcw,
+  Filter,
 } from 'lucide-react';
 import { AdminTotpGeneratorModal } from '@/components/admin/AdminTotpGeneratorModal';
+import { AdaptiveDatePicker } from '@/components/ui/AdaptiveDatePicker';
+import { DateRangeSelection, getPresetDateRange, isDateInRange } from '@/lib/date-utils';
 
 export default function ManagementDashboardPage() {
   const [metrics, setMetrics] = useState({
@@ -48,6 +52,7 @@ export default function ManagementDashboardPage() {
   const [evidenceItems, setEvidenceItems] = useState<EvidenceGalleryItem[]>([]);
   const [anomalies, setAnomalies] = useState<AnomalyAlert[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateRange, setDateRange] = useState<DateRangeSelection>(getPresetDateRange('all'));
   const [loading, setLoading] = useState(true);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceGalleryItem | null>(null);
   const [showPinModal, setShowPinModal] = useState(false);
@@ -75,6 +80,13 @@ export default function ManagementDashboardPage() {
   }, []);
 
   const filteredLogs = recentLogs.filter((log) => {
+    const matchesDate = isDateInRange(
+      log.business_date || log.submitted_at,
+      dateRange.startDate,
+      dateRange.endDate
+    );
+    if (!matchesDate) return false;
+
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -87,7 +99,11 @@ export default function ManagementDashboardPage() {
   const getLogAnomalies = (logId: string) =>
     anomalies.filter((a) => a.daily_log_id === logId);
 
-  const latestMileageAlerts = anomalies.filter((a) => a.rule_code === 'DAILY_MILEAGE_DIFF');
+  const latestMileageAlerts = anomalies.filter(
+    (a) =>
+      a.rule_code === 'DAILY_MILEAGE_DIFF' &&
+      isDateInRange(a.created_at, dateRange.startDate, dateRange.endDate)
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -114,6 +130,11 @@ export default function ManagementDashboardPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              <AdaptiveDatePicker
+                value={dateRange}
+                onChange={setDateRange}
+                align="right"
+              />
               <button
                 type="button"
                 onClick={() => setShowPinModal(true)}
@@ -360,6 +381,26 @@ export default function ManagementDashboardPage() {
                 </div>
               </div>
             </div>
+
+            {/* Active Date Filter Indicator */}
+            {dateRange.preset !== 'all' && (
+              <div className="mx-4 sm:mx-5 my-3 p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center justify-between">
+                <div className="flex items-center gap-2 font-medium">
+                  <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span>
+                    Active Date Window: <strong>{dateRange.label}</strong> — showing {filteredLogs.length} matching log{filteredLogs.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDateRange(getPresetDateRange('all'))}
+                  className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1 hover:underline shrink-0 ml-2"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  Reset to All Time
+                </button>
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
