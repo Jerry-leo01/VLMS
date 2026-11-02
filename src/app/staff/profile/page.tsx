@@ -46,19 +46,7 @@ export default function StaffProfilePage() {
       />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 w-full py-6 space-y-6 flex-1">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-slate-900">Staff Profile & Account</h1>
-          {profile && (
-            <button
-              type="button"
-              onClick={() => setIsEditModalOpen(true)}
-              className="py-1.5 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
-            >
-              <Edit3 className="w-3.5 h-3.5 text-navy-800" />
-              <span>Edit Profile</span>
-            </button>
-          )}
-        </div>
+        <h1 className="text-xl font-bold text-slate-900">Staff Profile & Account</h1>
 
         {/* Success Feedback Toast */}
         {successToast && (
@@ -97,9 +85,10 @@ export default function StaffProfilePage() {
             <button
               type="button"
               onClick={() => setIsEditModalOpen(true)}
-              className="sm:hidden self-start py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold flex items-center gap-1.5"
+              className="self-start sm:self-center py-2 px-3.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
             >
-              <Edit3 className="w-3.5 h-3.5" /> Edit Profile
+              <Edit3 className="w-3.5 h-3.5 text-navy-800" />
+              <span>Edit Profile</span>
             </button>
           </div>
 
