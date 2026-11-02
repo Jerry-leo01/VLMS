@@ -6,8 +6,10 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { DailyLog, FuelTransaction, Profile, VehicleAssignment } from '@/types/database';
 import { formatCurrency, formatOdometer, formatDateTime } from '@/lib/utils';
-import { Camera, Fuel, Clock, CheckCircle2, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Camera, Fuel, Clock, CheckCircle2, AlertTriangle, ArrowLeft, Filter, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
+import { AdaptiveDatePicker } from '@/components/ui/AdaptiveDatePicker';
+import { DateRangeSelection, getPresetDateRange, isDateInRange } from '@/lib/date-utils';
 
 export default function StaffHistoryPage() {
   const [activeTab, setActiveTab] = useState<'logs' | 'fuel'>('logs');
@@ -15,6 +17,7 @@ export default function StaffHistoryPage() {
   const [assignment, setAssignment] = useState<VehicleAssignment | null>(null);
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [fuelTx, setFuelTx] = useState<FuelTransaction[]>([]);
+  const [dateRange, setDateRange] = useState<DateRangeSelection>(getPresetDateRange('all'));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,6 +48,14 @@ export default function StaffHistoryPage() {
     loadData();
   }, []);
 
+  const filteredLogs = logs.filter((log) =>
+    isDateInRange(log.business_date || log.submitted_at, dateRange.startDate, dateRange.endDate)
+  );
+
+  const filteredFuel = fuelTx.filter((tx) =>
+    isDateInRange(tx.purchased_at || tx.submitted_at, dateRange.startDate, dateRange.endDate)
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-24 md:pb-8">
       <Navbar
@@ -54,20 +65,54 @@ export default function StaffHistoryPage() {
       />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 w-full py-6 space-y-6 flex-1">
-        <div className="flex items-center gap-2">
-          <Link
-            href="/staff"
-            className="p-1.5 bg-white border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 shadow-sm"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">My Submissions History</h1>
-            <p className="text-xs text-slate-500">
-              Verified daily vehicle logs and fuel transaction receipts
-            </p>
+        {/* Header with Title and Adaptive Date Picker */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/staff"
+              className="p-2 bg-white border border-slate-200 rounded-lg text-slate-600 hover:text-slate-900 shadow-sm transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </Link>
+            <div>
+              <h1 className="text-xl font-bold text-slate-900">My Submissions History</h1>
+              <p className="text-xs text-slate-500">
+                Verified daily vehicle logs and fuel transaction receipts
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end">
+            <AdaptiveDatePicker
+              value={dateRange}
+              onChange={setDateRange}
+              align="right"
+            />
           </div>
         </div>
+
+        {/* Active Date Filter Indicator */}
+        {dateRange.preset !== 'all' && (
+          <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center justify-between shadow-2xs">
+            <div className="flex items-center gap-2 font-medium">
+              <Filter className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+              <span>
+                Active Date Window: <strong>{dateRange.label}</strong> — showing{' '}
+                {activeTab === 'logs'
+                  ? `${filteredLogs.length} matching log${filteredLogs.length === 1 ? '' : 's'}`
+                  : `${filteredFuel.length} matching transaction${filteredFuel.length === 1 ? '' : 's'}`}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDateRange(getPresetDateRange('all'))}
+              className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 flex items-center gap-1 hover:underline shrink-0 ml-2"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset to All Time
+            </button>
+          </div>
+        )}
 
         {/* Tab Switcher */}
         <div className="flex border-b border-slate-200 bg-white rounded-xl p-1 shadow-sm">
@@ -80,7 +125,7 @@ export default function StaffHistoryPage() {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Camera className="w-4 h-4" /> Daily Odometer Logs ({logs.length})
+            <Camera className="w-4 h-4" /> Daily Odometer Logs ({filteredLogs.length})
           </button>
           <button
             type="button"
@@ -91,18 +136,31 @@ export default function StaffHistoryPage() {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Fuel className="w-4 h-4" /> Fuel Purchases ({fuelTx.length})
+            <Fuel className="w-4 h-4" /> Fuel Purchases ({filteredFuel.length})
           </button>
         </div>
 
         {activeTab === 'logs' ? (
           <div className="space-y-3">
-            {logs.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-xs">
-                No daily logs recorded yet.
+            {filteredLogs.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-xs space-y-2">
+                <p>
+                  {dateRange.preset !== 'all'
+                    ? `No daily logs found for the selected period (${dateRange.label}).`
+                    : 'No daily logs recorded yet.'}
+                </p>
+                {dateRange.preset !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => setDateRange(getPresetDateRange('all'))}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Reset to All Time
+                  </button>
+                )}
               </div>
             ) : (
-              logs.map((log) => (
+              filteredLogs.map((log) => (
                 <div
                   key={log.id}
                   className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"
@@ -152,12 +210,25 @@ export default function StaffHistoryPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {fuelTx.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-xs">
-                No fuel transactions recorded yet.
+            {filteredFuel.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-xs space-y-2">
+                <p>
+                  {dateRange.preset !== 'all'
+                    ? `No fuel transactions found for the selected period (${dateRange.label}).`
+                    : 'No fuel transactions recorded yet.'}
+                </p>
+                {dateRange.preset !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => setDateRange(getPresetDateRange('all'))}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Reset to All Time
+                  </button>
+                )}
               </div>
             ) : (
-              fuelTx.map((tx) => (
+              filteredFuel.map((tx) => (
                 <div
                   key={tx.id}
                   className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4"

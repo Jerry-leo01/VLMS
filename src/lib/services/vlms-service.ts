@@ -14,6 +14,7 @@ import {
   UserStatus,
   VehicleStatus,
   EvidenceType,
+  UpdateProfileInput,
 } from '@/types/database';
 import {
   getBusinessDate,
@@ -568,6 +569,88 @@ export const VLMSService = {
 
     persistToLocalStorage();
     return (await this.getStaffProfile(input.userId)) || profile;
+  },
+
+  /**
+   * Self-Service Profile Update (for staff/drivers/admins editing their own profile)
+   * Strictly enforces allowlisted fields: fullName, phoneNumber, email.
+   * Protects role, status, vehicle assignment, tomCard, and officeId from self-escalation.
+   */
+  async updateUserProfile(userId: string, input: UpdateProfileInput): Promise<Profile> {
+    syncFromLocalStorage();
+    const profile = store.profiles.find((p) => p.id === userId);
+    if (!profile) throw new Error('User profile not found.');
+
+    const beforeData = {
+      full_name: profile.full_name,
+      phone_number: profile.phone_number,
+      email: profile.email,
+    };
+
+    if (input.fullName !== undefined) {
+      const trimmedName = input.fullName.trim();
+      if (trimmedName.length < 3 || trimmedName.length > 100) {
+        throw new Error('Full name must be between 3 and 100 characters.');
+      }
+      profile.full_name = trimmedName;
+    }
+
+    if (input.phoneNumber !== undefined) {
+      const trimmedPhone = input.phoneNumber.trim();
+      if (trimmedPhone) {
+        // Validate Nigerian or international phone format
+        const phoneRegex = /^(\+?234|0)?[789][01]\d{8}$|^(\+[1-9]\d{6,14})$/;
+        const sanitizedPhone = trimmedPhone.replace(/[\s\-()]/g, '');
+        if (!phoneRegex.test(sanitizedPhone)) {
+          throw new Error('Please provide a valid phone number (e.g. +2348012345678 or 08012345678).');
+        }
+        profile.phone_number = trimmedPhone;
+      } else {
+        profile.phone_number = null;
+      }
+    }
+
+    if (input.email !== undefined) {
+      const trimmedEmail = input.email.trim();
+      if (trimmedEmail) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(trimmedEmail)) {
+          throw new Error('Please provide a valid email address.');
+        }
+        profile.email = trimmedEmail.toLowerCase();
+      } else {
+        profile.email = null;
+      }
+    }
+
+    profile.updated_at = new Date().toISOString();
+
+    // Immutable audit trail event
+    store.auditEvents.push({
+      id: `audit-${Date.now()}`,
+      actor_id: userId,
+      action: 'PROFILE_SELF_EDITED',
+      entity_type: 'USER',
+      entity_id: userId,
+      before_data: beforeData,
+      after_data: {
+        full_name: profile.full_name,
+        phone_number: profile.phone_number,
+        email: profile.email,
+      },
+      created_at: new Date().toISOString(),
+    });
+
+    // Synchronize active session if active session belongs to this user
+    const session = this.getActiveSession();
+    if (session && session.userId === userId) {
+      session.fullName = profile.full_name;
+      if (profile.email) session.email = profile.email;
+      this.setActiveSession(session);
+    }
+
+    persistToLocalStorage();
+    return (await this.getStaffProfile(userId)) || profile;
   },
 
   async registerVehicle(input: {

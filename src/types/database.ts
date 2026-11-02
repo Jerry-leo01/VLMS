@@ -59,6 +59,12 @@ export interface Profile {
   tom_card?: TomCard | null;
 }
 
+export interface UpdateProfileInput {
+  fullName?: string;
+  phoneNumber?: string;
+  email?: string;
+}
+
 export interface Vehicle {
   id: string;
   plate_number: string;

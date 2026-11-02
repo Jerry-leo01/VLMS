@@ -5,13 +5,16 @@ import { Navbar } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { Profile, VehicleAssignment, TomCard } from '@/types/database';
-import { User, Car, CreditCard, Building, ShieldCheck, LogOut, Phone } from 'lucide-react';
+import { User, Car, CreditCard, Building, ShieldCheck, LogOut, Phone, Mail, Edit3, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
+import { EditProfileModal } from '@/components/profile/EditProfileModal';
 
 export default function StaffProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [assignment, setAssignment] = useState<VehicleAssignment | null>(null);
   const [tomCard, setTomCard] = useState<TomCard | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -26,6 +29,14 @@ export default function StaffProfilePage() {
     loadData();
   }, []);
 
+  const handleProfileUpdated = (updated: Profile) => {
+    setProfile(updated);
+    setSuccessToast('Your profile information has been successfully updated.');
+    setTimeout(() => {
+      setSuccessToast(null);
+    }, 4000);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-24 md:pb-8">
       <Navbar
@@ -35,22 +46,61 @@ export default function StaffProfilePage() {
       />
 
       <main className="max-w-2xl mx-auto px-4 sm:px-6 w-full py-6 space-y-6 flex-1">
-        <h1 className="text-xl font-bold text-slate-900">Staff Profile & Account</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-slate-900">Staff Profile & Account</h1>
+          {profile && (
+            <button
+              type="button"
+              onClick={() => setIsEditModalOpen(true)}
+              className="py-1.5 px-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-colors"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-navy-800" />
+              <span>Edit Profile</span>
+            </button>
+          )}
+        </div>
+
+        {/* Success Feedback Toast */}
+        {successToast && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2 shadow-xs animate-in fade-in duration-200">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="font-medium">{successToast}</span>
+          </div>
+        )}
 
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm space-y-6">
-          <div className="flex items-center gap-4 border-b border-slate-100 pb-5">
-            <div className="w-14 h-14 rounded-full bg-navy-900 text-white flex items-center justify-center font-bold text-lg">
-              {profile?.full_name?.charAt(0) ?? 'S'}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-full bg-navy-900 text-white flex items-center justify-center font-bold text-lg shrink-0">
+                {profile?.full_name?.charAt(0) ?? 'S'}
+              </div>
+              <div className="space-y-0.5">
+                <h2 className="text-lg font-bold text-slate-900">{profile?.full_name ?? 'Assigned Driver'}</h2>
+                <div className="flex flex-wrap items-center gap-y-1 gap-x-3 text-xs text-slate-500">
+                  <span className="flex items-center gap-1">
+                    <Phone className="w-3 h-3 text-slate-400" />
+                    {profile?.phone_number ?? 'No phone added'}
+                  </span>
+                  {profile?.email && (
+                    <span className="flex items-center gap-1">
+                      <Mail className="w-3 h-3 text-slate-400" />
+                      {profile.email}
+                    </span>
+                  )}
+                </div>
+                <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                  <ShieldCheck className="w-3.5 h-3.5" /> Account Verified & Active
+                </span>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">{profile?.full_name ?? 'Assigned Driver'}</h2>
-              <span className="text-xs text-slate-500 block">
-                Phone: {profile?.phone_number ?? profile?.employee_id ?? 'Not provided'}
-              </span>
-              <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                <ShieldCheck className="w-3.5 h-3.5" /> Account Verified & Active
-              </span>
-            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsEditModalOpen(true)}
+              className="sm:hidden self-start py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-xs font-semibold flex items-center gap-1.5"
+            >
+              <Edit3 className="w-3.5 h-3.5" /> Edit Profile
+            </button>
           </div>
 
           <div className="space-y-4 text-xs">
@@ -80,6 +130,17 @@ export default function StaffProfilePage() {
                 {profile?.office?.name ?? 'Corporate Branch'}
               </span>
             </div>
+
+            {profile?.employee_id && (
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                <span className="text-slate-500 flex items-center gap-2">
+                  <User className="w-4 h-4 text-navy-800" /> Employee ID
+                </span>
+                <span className="font-mono font-semibold text-slate-700">
+                  {profile.employee_id}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="pt-2">
@@ -92,6 +153,15 @@ export default function StaffProfilePage() {
           </div>
         </div>
       </main>
+
+      {profile && (
+        <EditProfileModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          profile={profile}
+          onProfileUpdated={handleProfileUpdated}
+        />
+      )}
 
       <BottomNav />
     </div>
