@@ -42,6 +42,7 @@ export default function VehiclesManagementPage() {
   const [newStatus, setNewStatus] = useState<VehicleStatus>('active');
   const [newTomCard, setNewTomCard] = useState('');
   const [newAssignedUserId, setNewAssignedUserId] = useState('');
+  const [newEmployeeId, setNewEmployeeId] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
   const loadData = async () => {
@@ -97,6 +98,7 @@ export default function VehiclesManagementPage() {
       setNewModel('');
       setNewTomCard('');
       setNewAssignedUserId('');
+      setNewEmployeeId('');
       await loadData();
     } catch (err: unknown) {
       const errorObj = err as Error;
@@ -451,23 +453,48 @@ export default function VehiclesManagementPage() {
                   <p className="mt-1 text-[10px] text-slate-500">6 numeric digits.</p>
                 </div>
 
-                <div>
-                  <label htmlFor="vDriver" className="block font-semibold text-slate-800">
-                    Assign Staff Member
-                  </label>
-                  <select
-                    id="vDriver"
-                    value={newAssignedUserId}
-                    onChange={(e) => setNewAssignedUserId(e.target.value)}
-                    className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
-                  >
-                    <option value="">Unassigned Pool</option>
-                    {profiles.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.full_name}
-                      </option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="vDriver" className="block font-semibold text-slate-800">
+                      Assign Staff Member
+                    </label>
+                    <select
+                      id="vDriver"
+                      value={newAssignedUserId}
+                      onChange={(e) => {
+                        const selectedId = e.target.value;
+                        setNewAssignedUserId(selectedId);
+                        const matched = profiles.find((p) => p.id === selectedId);
+                        setNewEmployeeId(matched?.employee_id || '');
+                      }}
+                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                    >
+                      <option value="">Unassigned Pool</option>
+                      {profiles.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.full_name} {p.employee_id ? `(${p.employee_id})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="vEmployeeId" className="block font-semibold text-slate-800">
+                      Corporate Employee ID
+                    </label>
+                    <input
+                      id="vEmployeeId"
+                      type="text"
+                      readOnly
+                      disabled
+                      value={newEmployeeId}
+                      placeholder="Auto-linked from profile"
+                      className="mt-1 w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-600 font-mono text-xs cursor-not-allowed focus:outline-none"
+                    />
+                    <p className="mt-1 text-[10px] text-slate-500">
+                      Linked automatically from selected staff profile.
+                    </p>
+                  </div>
                 </div>
               </div>
 

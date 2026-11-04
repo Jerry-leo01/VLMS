@@ -550,6 +550,16 @@ export const VLMSService = {
       throw new Error('A valid corporate email address is required for administrator access.');
     }
 
+    if (input.employeeId && input.employeeId.trim()) {
+      const cleanEmpId = input.employeeId.trim().toUpperCase();
+      const existingProfileWithEmpId = store.profiles.find(
+        (p) => p.employee_id && p.employee_id.trim().toUpperCase() === cleanEmpId
+      );
+      if (existingProfileWithEmpId && existingProfileWithEmpId.email?.toLowerCase() !== normalizedEmail) {
+        throw new Error(`Staff ID "${cleanEmpId}" is already registered to another user account.`);
+      }
+    }
+
     const passwordHash = input.password ? await hashPassword(input.password) : null;
 
     const existing = store.profiles.find((p) => p.email?.toLowerCase() === normalizedEmail);
@@ -797,6 +807,16 @@ export const VLMSService = {
     store.vehicles.push(newVehicle);
 
     if (input.assignedUserId) {
+      const activeAsgForUser = store.assignments.find(
+        (a) => a.user_id === input.assignedUserId && a.ends_at === null
+      );
+      if (activeAsgForUser) {
+        const assignedVehicle = store.vehicles.find((v) => v.id === activeAsgForUser.vehicle_id);
+        throw new Error(
+          `Staff member is already assigned to active vehicle ${assignedVehicle?.plate_number || activeAsgForUser.vehicle_id}. Unassign them first before reassigning.`
+        );
+      }
+
       // Close any existing active assignment for this vehicle
       store.assignments.forEach((a) => {
         if (a.vehicle_id === newVehicle.id && a.ends_at === null) {
@@ -1341,6 +1361,16 @@ export const VLMSService = {
     // 3. Role Management: Public Registration is strictly restricted to Staff
     const assignedRole: UserRole = 'staff';
     const userId = `p-user-${Date.now()}`;
+    if (input.employeeId && input.employeeId.trim()) {
+      const cleanEmpId = input.employeeId.trim().toUpperCase();
+      const existingProfileWithEmpId = store.profiles.find(
+        (p) => p.employee_id && p.employee_id.trim().toUpperCase() === cleanEmpId
+      );
+      if (existingProfileWithEmpId) {
+        throw new Error(`Staff ID "${cleanEmpId}" is already registered to another user account. Kindly sign in.`);
+      }
+    }
+
     const passwordHash = input.password ? await hashPassword(input.password) : null;
 
     const newProfile: Profile = {

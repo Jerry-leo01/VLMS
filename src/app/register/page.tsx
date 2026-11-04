@@ -320,7 +320,6 @@ export default function RegisterPage() {
                           id="staffEmployeeId"
                           type="text"
                           required
-                          placeholder="e.g. EMP-2026-089"
                           value={employeeId}
                           onChange={(e) => setEmployeeId(e.target.value.toUpperCase())}
                           className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm font-mono text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500 uppercase"
@@ -697,7 +696,6 @@ export default function RegisterPage() {
                           id="admEmployeeId"
                           type="text"
                           required
-                          placeholder="e.g. ADM-2026-001"
                           value={employeeId}
                           onChange={(e) => setEmployeeId(e.target.value.toUpperCase())}
                           className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm font-mono text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 uppercase"
