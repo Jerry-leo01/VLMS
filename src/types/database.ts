@@ -51,12 +51,24 @@ export interface Profile {
   employee_id?: string | null;
   office_id: string | null;
   status: UserStatus;
+  password_hash?: string | null;
   created_at: string;
   updated_at: string;
   office?: Office;
   roles?: UserRole[];
   assigned_vehicle?: Vehicle | null;
   tom_card?: TomCard | null;
+}
+
+export interface PasswordResetToken {
+  id: string;
+  user_id: string;
+  identifier: string; // email or plate number
+  token_code: string; // 6-digit code
+  expires_at: string;
+  attempts: number;
+  used: boolean;
+  created_at: string;
 }
 
 export interface UpdateProfileInput {
@@ -79,6 +91,7 @@ export interface Vehicle {
   assigned_office?: Office | null;
   tom_card?: TomCard | null;
   latest_odometer_km?: number | null;
+  current_odometer_km?: number | null;
 }
 
 export interface VehicleAssignment {

@@ -66,7 +66,7 @@ describe('VLMS Service & Business Logic', () => {
     expect(fuelAlert?.details.notification).toContain('traveled 50km from the last submitted log to the fuel purchase point.');
   });
 
-  it('should process registration request and approve user into active status', async () => {
+  it('should process registration request and automatically authorize user into active status', async () => {
     const req = await VLMSService.submitRegistration({
       fullName: 'Oluwaseun Bakare',
       phoneNumber: '+2348012345678',
@@ -78,11 +78,8 @@ describe('VLMS Service & Business Logic', () => {
       officeId: '11111111-1111-1111-1111-111111111111',
     });
 
-    expect(req.status).toBe('pending');
+    expect(req.status).toBe('approved');
     expect(req.requested_car_name).toBe('Toyota Corolla Executive');
-
-    const approved = await VLMSService.approveRegistration(req.id, 'p-admin-01');
-    expect(approved.status).toBe('approved');
 
     const profile = await VLMSService.getStaffProfile(req.user_id);
     expect(profile?.status).toBe('active');

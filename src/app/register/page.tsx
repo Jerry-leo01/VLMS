@@ -104,6 +104,7 @@ export default function RegisterPage() {
         carName,
         carModel,
         carYear: parseInt(carYear, 10) || 2023,
+        password: password.trim() || undefined,
         requestedRole: 'staff',
       });
 
@@ -133,6 +134,7 @@ export default function RegisterPage() {
         phoneNumber,
         officeId,
         role: adminRole,
+        password: password.trim() || undefined,
       });
 
       VLMSService.setActiveSession({
@@ -183,24 +185,27 @@ export default function RegisterPage() {
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-xl">
         <div className="bg-white dark:bg-slate-900 py-6 sm:py-8 px-4 sm:px-8 shadow-sm border border-slate-200 dark:border-slate-800 rounded-2xl space-y-6 transition-colors">
           {submitted ? (
-            <div className="text-center space-y-4 py-4">
+            <div className="text-center space-y-4 py-4 animate-in fade-in duration-200">
               <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-                Registration Submitted Successfully
+                Account & Vehicle Authorized Immediately
               </h3>
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
                 Your registration for company car{' '}
                 <strong className="text-navy-900 dark:text-blue-400 font-mono font-bold">
                   {normalizePlateNumber(plateNumber)}
                 </strong>{' '}
-                ({carName}) has been received for verification.
+                ({carName}) has been automatically verified and activated.
               </p>
-              <div className="p-4 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 rounded-xl text-xs text-amber-900 dark:text-amber-200 text-left space-y-1">
-                <strong>Status: Pending Administrator Approval</strong>
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900 rounded-xl text-xs text-emerald-900 dark:text-emerald-200 text-left space-y-1">
+                <strong className="flex items-center gap-1.5 font-bold">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  Status: Active & Authorized for Immediate Login
+                </strong>
                 <p>
-                  Fleet administration will review your car details, phone number, and branch assignment in the Approvals Queue. Once authorized, you can sign in using your plate number.
+                  Your staff profile, vehicle custody assignment, and TOM card link are active immediately. You can now sign in using your vehicle plate number and account password.
                 </p>
               </div>
               <Link

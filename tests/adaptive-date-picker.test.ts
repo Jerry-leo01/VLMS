@@ -26,7 +26,7 @@ describe('Advanced Adaptive Date Picker & Range Utilities', () => {
   });
 
   it('should correctly compute "today" preset', () => {
-    const range = getPresetDateRange('today', null, null, referenceDate);
+    const range = getPresetDateRange('today');
     expect(range.preset).toBe('today');
     expect(range.startDate).toBe(getBusinessDate());
     expect(range.endDate).toBe(getBusinessDate());

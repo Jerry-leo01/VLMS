@@ -48,10 +48,10 @@ export function getPresetDateRange(
   preset: DatePreset,
   customStart?: string | null,
   customEnd?: string | null,
-  referenceDate: Date = new Date()
+  referenceDate?: Date
 ): DateRangeSelection {
-  const todayStr = getBusinessDate(); // YYYY-MM-DD in Africa/Lagos timezone
-  const todayDate = referenceDate;
+  const todayStr = referenceDate ? format(referenceDate, 'yyyy-MM-dd') : getBusinessDate();
+  const todayDate = referenceDate || new Date();
 
   switch (preset) {
     case 'today':

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Car, AlertCircle, ArrowRight } from 'lucide-react';
@@ -18,6 +18,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Eager background sync on mount to ensure cross-device consistency
+  useEffect(() => {
+    VLMSService.syncWithServer().catch(() => {
+      // Non-blocking background sync failure fallback
+    });
+  }, []);
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -30,8 +37,20 @@ export default function LoginPage() {
 
       if (isEmail) {
         // 1. Check local / hybrid production store first
-        const localProfile = await VLMSService.getStaffProfileByEmail(trimmed);
+        let localProfile = await VLMSService.getStaffProfileByEmail(trimmed);
+        if (!localProfile) {
+          // If not found in local cache, attempt server synchronization (cross-device session)
+          await VLMSService.syncWithServer();
+          localProfile = await VLMSService.getStaffProfileByEmail(trimmed);
+        }
+
         if (localProfile) {
+          // Verify password credential
+          const isValid = await VLMSService.verifyUserPassword(localProfile.id, password);
+          if (!isValid) {
+            throw new Error('Invalid password. Please check your credentials or reset your password.');
+          }
+
           const role = (await VLMSService.getUserRole(localProfile.id)) || 'administrator';
           VLMSService.setActiveSession({
             userId: localProfile.id,
@@ -89,7 +108,13 @@ export default function LoginPage() {
 
       // Plate Number Authentication for Drivers
       const normalizedPlate = normalizePlateNumber(trimmed);
-      const vehicle = await VLMSService.getVehicleByPlate(normalizedPlate);
+      let vehicle = await VLMSService.getVehicleByPlate(normalizedPlate);
+
+      if (!vehicle) {
+        // Sync with server in case account was registered on another device/browser
+        await VLMSService.syncWithServer();
+        vehicle = await VLMSService.getVehicleByPlate(normalizedPlate);
+      }
 
       if (!vehicle) {
         const pending = await VLMSService.getPendingRegistrationByPlate(normalizedPlate);
@@ -109,6 +134,12 @@ export default function LoginPage() {
         throw new Error(
           'No active staff assignment found for this vehicle. Contact fleet management.'
         );
+      }
+
+      // Verify driver password credential
+      const isValid = await VLMSService.verifyUserPassword(asg.user_id, password);
+      if (!isValid) {
+        throw new Error('Invalid password. Please check your credentials or reset your password.');
       }
 
       VLMSService.setActiveSession({
@@ -198,7 +229,7 @@ export default function LoginPage() {
                   Password <span className="text-red-500">*</span>
                 </label>
                 <Link
-                  href="/help"
+                  href="/forgot-password"
                   className="text-xs text-navy-800 dark:text-blue-400 hover:underline font-medium"
                 >
                   Forgot password?

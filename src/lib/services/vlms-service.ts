@@ -15,6 +15,7 @@ import {
   VehicleStatus,
   EvidenceType,
   UpdateProfileInput,
+  PasswordResetToken,
 } from '@/types/database';
 import {
   getBusinessDate,
@@ -25,6 +26,7 @@ import {
 } from '@/lib/utils';
 import { isDateInRange } from '@/lib/date-utils';
 import { evaluateAnomalies } from '@/lib/anomaly-engine';
+import { hashPassword, verifyPassword } from '@/lib/security/password';
 
 export interface ActiveSession {
   userId: string;
@@ -93,6 +95,7 @@ interface DataStore {
   fuelTransactions: FuelTransaction[];
   anomalyAlerts: AnomalyAlert[];
   auditEvents: AuditEvent[];
+  resetTokens: PasswordResetToken[];
 }
 
 const DEFAULT_OFFICES: Office[] = [
@@ -171,31 +174,98 @@ const store: DataStore = {
   fuelTransactions: [],
   anomalyAlerts: [],
   auditEvents: [],
+  resetTokens: [],
 };
 
 let isHydratedFromStorage = false;
 
+function mergeStoreFromData(parsed: Partial<DataStore>): void {
+  if (Array.isArray(parsed.profiles)) {
+    const map = new Map(store.profiles.map((p) => [p.id, p]));
+    for (const p of parsed.profiles) map.set(p.id, p);
+    store.profiles = Array.from(map.values());
+  }
+  if (Array.isArray(parsed.userRoles)) {
+    const map = new Map(store.userRoles.map((r) => [r.userId, r]));
+    for (const r of parsed.userRoles) map.set(r.userId, r);
+    store.userRoles = Array.from(map.values());
+  }
+  if (Array.isArray(parsed.vehicles)) {
+    const map = new Map(store.vehicles.map((v) => [v.id, v]));
+    for (const v of parsed.vehicles) map.set(v.id, v);
+    store.vehicles = Array.from(map.values());
+  }
+  if (Array.isArray(parsed.assignments)) {
+    const map = new Map(store.assignments.map((a) => [a.id, a]));
+    for (const a of parsed.assignments) map.set(a.id, a);
+    store.assignments = Array.from(map.values());
+  }
+  if (Array.isArray(parsed.tomCards)) {
+    const map = new Map(store.tomCards.map((t) => [t.id, t]));
+    for (const t of parsed.tomCards) map.set(t.id, t);
+    store.tomCards = Array.from(map.values());
+  }
+  if (Array.isArray(parsed.registrationRequests)) {
+    const map = new Map(store.registrationRequests.map((r) => [r.id, r]));
+    for (const r of parsed.registrationRequests) map.set(r.id, r);
+    store.registrationRequests = Array.from(map.values());
+  }
+  if (Array.isArray(parsed.evidenceFiles)) {
+    const map = new Map(store.evidenceFiles.map((e) => [e.id, e]));
+    for (const e of parsed.evidenceFiles) map.set(e.id, e);
+    store.evidenceFiles = Array.from(map.values());
+  }
+  if (Array.isArray(parsed.dailyLogs)) {
+    const map = new Map(store.dailyLogs.map((l) => [l.id, l]));
+    for (const l of parsed.dailyLogs) map.set(l.id, l);
+    store.dailyLogs = Array.from(map.values());
+  }
+  if (Array.isArray(parsed.fuelTransactions)) {
+    const map = new Map(store.fuelTransactions.map((f) => [f.id, f]));
+    for (const f of parsed.fuelTransactions) map.set(f.id, f);
+    store.fuelTransactions = Array.from(fuelTransactionsToMap(parsed.fuelTransactions).values());
+  }
+  if (Array.isArray(parsed.anomalyAlerts)) {
+    const map = new Map(store.anomalyAlerts.map((a) => [a.id, a]));
+    for (const a of parsed.anomalyAlerts) map.set(a.id, a);
+    store.anomalyAlerts = Array.from(map.values());
+  }
+  if (Array.isArray(parsed.auditEvents)) {
+    const map = new Map(store.auditEvents.map((a) => [a.id, a]));
+    for (const a of parsed.auditEvents) map.set(a.id, a);
+    store.auditEvents = Array.from(map.values());
+  }
+  if (Array.isArray(parsed.resetTokens)) {
+    const map = new Map((store.resetTokens || []).map((t) => [t.id, t]));
+    for (const t of parsed.resetTokens) map.set(t.id, t);
+    store.resetTokens = Array.from(map.values());
+  }
+}
+
+function fuelTransactionsToMap(txs: FuelTransaction[]) {
+  const map = new Map(store.fuelTransactions.map((f) => [f.id, f]));
+  for (const f of txs) map.set(f.id, f);
+  return map;
+}
+
 function syncFromLocalStorage(): void {
-  if (typeof window === 'undefined' || isHydratedFromStorage) return;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<DataStore>;
-      if (Array.isArray(parsed.profiles)) store.profiles = parsed.profiles;
-      if (Array.isArray(parsed.userRoles)) store.userRoles = parsed.userRoles;
-      if (Array.isArray(parsed.vehicles)) store.vehicles = parsed.vehicles;
-      if (Array.isArray(parsed.assignments)) store.assignments = parsed.assignments;
-      if (Array.isArray(parsed.tomCards)) store.tomCards = parsed.tomCards;
-      if (Array.isArray(parsed.registrationRequests)) store.registrationRequests = parsed.registrationRequests;
-      if (Array.isArray(parsed.evidenceFiles)) store.evidenceFiles = parsed.evidenceFiles;
-      if (Array.isArray(parsed.dailyLogs)) store.dailyLogs = parsed.dailyLogs;
-      if (Array.isArray(parsed.fuelTransactions)) store.fuelTransactions = parsed.fuelTransactions;
-      if (Array.isArray(parsed.anomalyAlerts)) store.anomalyAlerts = parsed.anomalyAlerts;
-      if (Array.isArray(parsed.auditEvents)) store.auditEvents = parsed.auditEvents;
+  if (typeof window === 'undefined') return;
+  if (!isHydratedFromStorage) {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<DataStore>;
+        mergeStoreFromData(parsed);
+      }
+      isHydratedFromStorage = true;
+    } catch {
+      isHydratedFromStorage = true;
     }
-    isHydratedFromStorage = true;
-  } catch {
-    isHydratedFromStorage = true;
+  }
+
+  // Trigger non-blocking background server sync
+  if (typeof window !== 'undefined' && typeof fetch === 'function') {
+    VLMSService.syncWithServer().catch(() => {});
   }
 }
 
@@ -203,6 +273,14 @@ function persistToLocalStorage(): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    // Asynchronously dispatch to server API route for cross-device persistence
+    if (typeof fetch === 'function') {
+      fetch('/api/store', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(store),
+      }).catch(() => {});
+    }
   } catch {
     // Handle storage quota gracefully
   }
@@ -239,6 +317,23 @@ export const VLMSService = {
       window.localStorage.removeItem(SESSION_KEY);
     } catch {
       // Ignore
+    }
+  },
+
+  async syncWithServer(): Promise<void> {
+    if (typeof window === 'undefined' || typeof fetch !== 'function') return;
+    try {
+      const res = await fetch('/api/store', { cache: 'no-store' });
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json?.data) {
+        mergeStoreFromData(json.data);
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+        }
+      }
+    } catch {
+      // Non-blocking server sync
     }
   },
 
@@ -445,8 +540,9 @@ export const VLMSService = {
     email: string;
     phoneNumber?: string;
     employeeId?: string;
-    officeId: string;
+    officeId?: string;
     role?: 'administrator' | 'fleet_manager' | 'department_head' | 'auditor';
+    password?: string;
   }): Promise<{ profile: Profile; role: UserRole }> {
     syncFromLocalStorage();
     const normalizedEmail = input.email.trim().toLowerCase();
@@ -454,8 +550,14 @@ export const VLMSService = {
       throw new Error('A valid corporate email address is required for administrator access.');
     }
 
+    const passwordHash = input.password ? await hashPassword(input.password) : null;
+
     const existing = store.profiles.find((p) => p.email?.toLowerCase() === normalizedEmail);
     if (existing) {
+      if (passwordHash && !existing.password_hash) {
+        existing.password_hash = passwordHash;
+        persistToLocalStorage();
+      }
       const existingRole = (await this.getUserRole(existing.id)) || 'administrator';
       const hydrated = (await this.getStaffProfile(existing.id)) || existing;
       return { profile: hydrated, role: existingRole };
@@ -474,6 +576,7 @@ export const VLMSService = {
       employee_id: input.employeeId?.trim() || `ADM-${Date.now().toString().slice(-4)}`,
       office_id: input.officeId || DEFAULT_OFFICES[0].id,
       status: 'active',
+      password_hash: passwordHash,
       created_at: now,
       updated_at: now,
     };
@@ -1192,19 +1295,29 @@ export const VLMSService = {
   // Registration Request & Approval
   async submitRegistration(input: {
     fullName: string;
+    email?: string;
     phoneNumber?: string;
     employeeId?: string;
     plateNumber: string;
     tomCardNumber?: string;
-    officeId: string;
+    officeId?: string;
     carName?: string;
     carModel?: string;
     carYear?: number;
+    make?: string;
+    model?: string;
+    year?: number;
+    odometerKm?: number;
+    vin?: string;
+    department?: string;
+    role?: string;
+    password?: string;
     requestedRole?: UserRole;
     adminPasscode?: string;
   }): Promise<RegistrationRequest> {
     syncFromLocalStorage();
     const normalizedPlate = normalizePlateNumber(input.plateNumber);
+    const now = new Date().toISOString();
 
     // 1. Data Integrity: Enforce Unique constraint on vehicle plate number
     const existingVehicle = store.vehicles.find(
@@ -1227,22 +1340,69 @@ export const VLMSService = {
 
     // 3. Role Management: Public Registration is strictly restricted to Staff
     const assignedRole: UserRole = 'staff';
-
     const userId = `p-user-${Date.now()}`;
+    const passwordHash = input.password ? await hashPassword(input.password) : null;
+
     const newProfile: Profile = {
       id: userId,
       auth_user_id: `auth-${Date.now()}`,
       full_name: input.fullName.trim(),
+      email: input.email?.trim().toLowerCase() || null,
       phone_number: input.phoneNumber?.trim() ?? null,
       employee_id: input.employeeId?.trim() ?? `DRV-${Date.now().toString().slice(-4)}`,
-      office_id: input.officeId,
-      status: 'pending',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      office_id: input.officeId || DEFAULT_OFFICES[0].id,
+      status: 'active', // Auto-authorized immediately
+      password_hash: passwordHash,
+      created_at: now,
+      updated_at: now,
     };
     store.profiles.push(newProfile);
     store.userRoles.push({ userId, role: assignedRole });
 
+    // 4. Automatically provision vehicle with active status
+    const vehicleId = `v-${Date.now()}`;
+    const vehicleMake = input.make?.trim() || input.carName?.trim() || 'Company Vehicle';
+    const vehicleModel = input.model?.trim() || input.carModel?.trim() || 'Standard Fleet';
+    const vehicle: Vehicle = {
+      id: vehicleId,
+      plate_number: normalizedPlate,
+      make: vehicleMake,
+      model: vehicleModel,
+      car_name: input.carName?.trim() || `${vehicleMake} ${vehicleModel}`,
+      year: input.year || input.carYear || new Date().getFullYear(),
+      current_odometer_km: input.odometerKm || 0,
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    };
+    store.vehicles.push(vehicle);
+
+    // 5. Automatically provision vehicle assignment
+    store.assignments.push({
+      id: `asg-${Date.now()}`,
+      user_id: userId,
+      vehicle_id: vehicleId,
+      starts_at: now,
+      ends_at: null,
+      assigned_by: 'SYSTEM_AUTO',
+      created_at: now,
+    });
+
+    // 6. Automatically provision TOM Card if provided
+    if (input.tomCardNumber && input.tomCardNumber.trim()) {
+      store.tomCards.push({
+        id: `tc-${Date.now()}`,
+        card_reference: input.tomCardNumber.trim(),
+        masked_card_number: input.tomCardNumber.trim(),
+        vehicle_id: vehicleId,
+        user_id: userId,
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+      });
+    }
+
+    // 7. Auto-approve registration request record
     const reqId = `reg-${Date.now()}`;
     const req: RegistrationRequest = {
       id: reqId,
@@ -1253,19 +1413,19 @@ export const VLMSService = {
       requested_car_model: input.carModel ?? null,
       requested_car_year: input.carYear ?? null,
       requested_tom_card: input.tomCardNumber?.trim() || null,
-      requested_office_id: input.officeId,
+      requested_office_id: input.officeId || DEFAULT_OFFICES[0].id,
       requested_role: assignedRole,
-      status: 'pending',
-      reviewer_id: null,
-      reviewed_at: null,
+      status: 'approved',
+      reviewer_id: 'SYSTEM_AUTO',
+      reviewed_at: now,
       rejection_reason: null,
-      created_at: new Date().toISOString(),
+      created_at: now,
     };
     store.registrationRequests.push(req);
 
-    // Audit Event
+    // Audit Events
     store.auditEvents.push({
-      id: `audit-${Date.now()}`,
+      id: `audit-${Date.now()}-1`,
       actor_id: userId,
       action: 'REGISTRATION_SUBMITTED',
       entity_type: 'REGISTRATION_REQUEST',
@@ -1280,7 +1440,18 @@ export const VLMSService = {
         carYear: input.carYear,
         role: assignedRole,
       },
-      created_at: new Date().toISOString(),
+      created_at: now,
+    });
+
+    store.auditEvents.push({
+      id: `audit-${Date.now()}-2`,
+      actor_id: 'SYSTEM_AUTO',
+      action: 'REGISTRATION_AUTO_APPROVED',
+      entity_type: 'REGISTRATION_REQUEST',
+      entity_id: reqId,
+      before_data: { status: 'pending' },
+      after_data: { status: 'approved', vehicle_id: vehicleId, plate_number: normalizedPlate },
+      created_at: now,
     });
 
     persistToLocalStorage();
@@ -1603,5 +1774,198 @@ export const VLMSService = {
         const requested_office = store.offices.find((o) => o.id === req.requested_office_id);
         return { ...req, user, requested_office };
       });
+  },
+
+  /**
+   * Secure Forgot Password Engine: Initiates recovery by looking up user via plate number, phone, or email.
+   * Generates a 6-digit numeric recovery code valid for 10 minutes.
+   */
+  async initiatePasswordReset(identifier: string): Promise<{
+    success: boolean;
+    message: string;
+    maskedContact: string;
+    recoveryCode: string;
+    expiresAt: string;
+  }> {
+    syncFromLocalStorage();
+    await this.syncWithServer();
+    const trimmed = identifier.trim();
+    if (!trimmed) {
+      throw new Error('Please enter your plate number or corporate email address.');
+    }
+    const isEmail = trimmed.includes('@');
+
+    let matchedUser: Profile | null = null;
+    let contactInfo = '';
+
+    if (isEmail) {
+      const emailLower = trimmed.toLowerCase();
+      matchedUser = store.profiles.find((p) => p.email?.toLowerCase() === emailLower) || null;
+      contactInfo = matchedUser?.email || trimmed;
+    } else {
+      const normalizedPlate = normalizePlateNumber(trimmed);
+      const vehicle = store.vehicles.find((v) => normalizePlateNumber(v.plate_number) === normalizedPlate);
+      if (vehicle) {
+        const asg = store.assignments.find((a) => a.vehicle_id === vehicle.id && a.ends_at === null);
+        if (asg) {
+          matchedUser = store.profiles.find((p) => p.id === asg.user_id) || null;
+        }
+      }
+      if (!matchedUser) {
+        // Also check by phone number
+        const cleanPhone = trimmed.replace(/\D/g, '');
+        if (cleanPhone.length >= 7) {
+          matchedUser = store.profiles.find((p) => p.phone_number?.replace(/\D/g, '') === cleanPhone) || null;
+        }
+      }
+      contactInfo = matchedUser?.phone_number || matchedUser?.email || normalizedPlate;
+    }
+
+    if (!matchedUser) {
+      throw new Error(
+        isEmail
+          ? 'No account found matching this corporate email address.'
+          : 'No active staff assignment found matching this vehicle plate number.'
+      );
+    }
+
+    // Generate 6-digit numeric OTP code
+    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+
+    const resetToken: PasswordResetToken = {
+      id: `prt-${Date.now()}`,
+      user_id: matchedUser.id,
+      identifier: trimmed,
+      token_code: otpCode,
+      expires_at: expiresAt,
+      attempts: 0,
+      used: false,
+      created_at: new Date().toISOString(),
+    };
+
+    if (!store.resetTokens) store.resetTokens = [];
+    store.resetTokens.push(resetToken);
+    persistToLocalStorage();
+
+    // Mask contact for privacy display
+    let masked = contactInfo;
+    if (contactInfo.includes('@')) {
+      const [local, domain] = contactInfo.split('@');
+      masked = `${local.slice(0, 1)}***@${domain}`;
+    } else if (contactInfo.length >= 6) {
+      masked = `${contactInfo.slice(0, 3)}***${contactInfo.slice(-2)}`;
+    }
+
+    return {
+      success: true,
+      message: 'Security recovery code generated successfully.',
+      maskedContact: masked,
+      recoveryCode: otpCode,
+      expiresAt,
+    };
+  },
+
+  /**
+   * Verifies the 6-digit recovery code and updates the user's password.
+   */
+  async verifyAndResetPassword(input: {
+    identifier: string;
+    code: string;
+    newPassword: string;
+  }): Promise<{ success: boolean; message: string }> {
+    syncFromLocalStorage();
+    await this.syncWithServer();
+
+    if (!input.newPassword || input.newPassword.length < 6) {
+      throw new Error('New password must be at least 6 characters in length.');
+    }
+
+    const trimmedIdentifier = input.identifier.trim();
+    const trimmedCode = input.code.trim();
+
+    if (!store.resetTokens) store.resetTokens = [];
+
+    // Find the latest active token for this identifier or matching user
+    const token = store.resetTokens
+      .slice()
+      .reverse()
+      .find((t) => {
+        if (t.used) return false;
+        if (t.identifier.toLowerCase() === trimmedIdentifier.toLowerCase()) return true;
+        const normalized = normalizePlateNumber(trimmedIdentifier);
+        if (normalizePlateNumber(t.identifier) === normalized) return true;
+        return false;
+      });
+
+    if (!token) {
+      throw new Error('No active password reset request found. Please request a new recovery code.');
+    }
+
+    if (new Date(token.expires_at).getTime() < Date.now()) {
+      throw new Error('The recovery code has expired. Please request a new one.');
+    }
+
+    if (token.attempts >= 5) {
+      token.used = true;
+      persistToLocalStorage();
+      throw new Error('Maximum verification attempts exceeded. Please initiate a new recovery request.');
+    }
+
+    if (token.token_code !== trimmedCode) {
+      token.attempts += 1;
+      persistToLocalStorage();
+      throw new Error(`Invalid recovery code. ${5 - token.attempts} attempts remaining.`);
+    }
+
+    // Code matches! Update user password
+    const user = store.profiles.find((p) => p.id === token.user_id);
+    if (!user) {
+      throw new Error('Associated user profile could not be found.');
+    }
+
+    user.password_hash = await hashPassword(input.newPassword);
+    user.updated_at = new Date().toISOString();
+    token.used = true;
+
+    // Audit event
+    store.auditEvents.push({
+      id: `audit-${Date.now()}`,
+      actor_id: user.id,
+      action: 'PASSWORD_RESET_COMPLETED',
+      entity_type: 'USER',
+      entity_id: user.id,
+      before_data: null,
+      after_data: { user_id: user.id, reset_at: user.updated_at },
+      created_at: new Date().toISOString(),
+    });
+
+    persistToLocalStorage();
+    return {
+      success: true,
+      message: 'Password has been reset successfully. You can now sign in with your new credentials.',
+    };
+  },
+
+  /**
+   * Verifies user password credentials during login.
+   * Supports seamless backward-compatible onboarding if user has not yet set a password hash.
+   */
+  async verifyUserPassword(userId: string, passwordInput: string): Promise<boolean> {
+    syncFromLocalStorage();
+    const user = store.profiles.find((p) => p.id === userId);
+    if (!user) return false;
+
+    // If account was created prior to password requirement, bootstrap on first valid password entry
+    if (!user.password_hash) {
+      if (passwordInput && passwordInput.length >= 6) {
+        user.password_hash = await hashPassword(passwordInput);
+        persistToLocalStorage();
+        return true;
+      }
+      return true;
+    }
+
+    return verifyPassword(passwordInput, user.password_hash);
   },
 };

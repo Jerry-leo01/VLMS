@@ -174,36 +174,8 @@ export default function ManagementDashboardPage() {
               >
                 <FileSpreadsheet className="w-4 h-4 text-emerald-600" /> Export CSV Report
               </Link>
-              <Link
-                href="/management/approvals"
-                className="py-2 px-3.5 bg-navy-900 text-white rounded-lg text-xs font-semibold hover:bg-navy-800 shadow-sm flex items-center gap-2"
-              >
-                <Users className="w-4 h-4 text-blue-300" />
-                Approvals Queue ({metrics.pendingApprovals})
-              </Link>
             </div>
           </div>
-
-          {/* Pending Approval Alert Banner */}
-          {metrics.pendingApprovals > 0 && (
-            <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-3 text-xs text-amber-900">
-                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-                <div>
-                  <strong>{metrics.pendingApprovals} Pending Staff Registration Request(s)</strong>
-                  <p className="text-amber-800">
-                    Staff members are waiting for vehicle and TOM card assignment authorization.
-                  </p>
-                </div>
-              </div>
-              <Link
-                href="/management/approvals"
-                className="py-1.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shrink-0"
-              >
-                Review Now
-              </Link>
-            </div>
-          )}
 
           {/* Open Anomaly Alerts Banner */}
           {metrics.openAnomalies > 0 && (
