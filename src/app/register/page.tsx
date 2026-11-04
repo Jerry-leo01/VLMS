@@ -26,6 +26,7 @@ export default function RegisterPage() {
 
   // Staff Registration Form State
   const [fullName, setFullName] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [plateNumber, setPlateNumber] = useState('');
   const [tomCardNumber, setTomCardNumber] = useState('');
@@ -87,6 +88,11 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!employeeId.trim()) {
+      setError('Corporate Employee ID is required for vehicle registration.');
+      return;
+    }
+
     if (tomCardNumber.trim() && !/^\d{6}$/.test(tomCardNumber.trim())) {
       setError('TOM Card number must be exactly 6 numeric digits.');
       return;
@@ -97,6 +103,7 @@ export default function RegisterPage() {
       const normalizedPlate = normalizePlateNumber(plateNumber);
       await VLMSService.submitRegistration({
         fullName,
+        employeeId: employeeId.trim(),
         phoneNumber,
         plateNumber: normalizedPlate,
         tomCardNumber: tomCardNumber.trim() || undefined,
@@ -126,10 +133,16 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!employeeId.trim()) {
+      setError('Corporate Employee ID is required for administrator onboarding.');
+      return;
+    }
+
     setLoading(true);
     try {
       const { profile, role } = await VLMSService.registerAdminAccount({
         fullName,
+        employeeId: employeeId.trim(),
         email: adminEmail,
         phoneNumber,
         officeId,
@@ -295,25 +308,47 @@ export default function RegisterPage() {
                           Driver first and surname.
                         </p>
                       </div>
+
                       <div>
                         <label
-                          htmlFor="staffPhone"
+                          htmlFor="staffEmployeeId"
                           className="block text-xs font-semibold text-slate-800 dark:text-slate-200"
                         >
-                          User Phone Number <span className="text-red-500">*</span>
+                          Employee ID <span className="text-red-500">*</span>
                         </label>
                         <input
-                          id="staffPhone"
-                          type="tel"
+                          id="staffEmployeeId"
+                          type="text"
                           required
-                          value={phoneNumber}
-                          onChange={(e) => setPhoneNumber(e.target.value)}
-                          className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
+                          placeholder="e.g. EMP-2026-089"
+                          value={employeeId}
+                          onChange={(e) => setEmployeeId(e.target.value.toUpperCase())}
+                          className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm font-mono text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500 uppercase"
                         />
                         <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
-                          Active mobile contact number.
+                          Corporate staff identifier displayed on your profile.
                         </p>
                       </div>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="staffPhone"
+                        className="block text-xs font-semibold text-slate-800 dark:text-slate-200"
+                      >
+                        User Phone Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="staffPhone"
+                        type="tel"
+                        required
+                        value={phoneNumber}
+                        onChange={(e) => setPhoneNumber(e.target.value)}
+                        className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
+                      />
+                      <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                        Active mobile contact number.
+                      </p>
                     </div>
 
                     {/* Vehicle Plate & TOM Card */}
@@ -653,6 +688,27 @@ export default function RegisterPage() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label
+                          htmlFor="admEmployeeId"
+                          className="block text-xs font-semibold text-slate-800 dark:text-slate-200"
+                        >
+                          Employee ID <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          id="admEmployeeId"
+                          type="text"
+                          required
+                          placeholder="e.g. ADM-2026-001"
+                          value={employeeId}
+                          onChange={(e) => setEmployeeId(e.target.value.toUpperCase())}
+                          className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm font-mono text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 uppercase"
+                        />
+                        <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                          Corporate administrator ID badge.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label
                           htmlFor="admPhone"
                           className="block text-xs font-semibold text-slate-800 dark:text-slate-200"
                         >
@@ -666,8 +722,13 @@ export default function RegisterPage() {
                           onChange={(e) => setPhoneNumber(e.target.value)}
                           className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800"
                         />
+                        <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                          Active mobile contact number.
+                        </p>
                       </div>
+                    </div>
 
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label
                           htmlFor="admRoleSelect"
@@ -690,9 +751,7 @@ export default function RegisterPage() {
                           <option value="auditor">Auditor</option>
                         </select>
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label
                           htmlFor="admOfficeSelect"
@@ -713,24 +772,27 @@ export default function RegisterPage() {
                           ))}
                         </select>
                       </div>
+                    </div>
 
-                      <div>
-                        <label
-                          htmlFor="admPasswordInput"
-                          className="block text-xs font-semibold text-slate-800 dark:text-slate-200"
-                        >
-                          Password <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          id="admPasswordInput"
-                          type="password"
-                          required
-                          minLength={6}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800"
-                        />
-                      </div>
+                    <div>
+                      <label
+                        htmlFor="admPasswordInput"
+                        className="block text-xs font-semibold text-slate-800 dark:text-slate-200"
+                      >
+                        Password <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        id="admPasswordInput"
+                        type="password"
+                        required
+                        minLength={6}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      />
+                      <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                        At least 6 characters required for administrator sign in.
+                      </p>
                     </div>
 
                     <div className="flex items-start gap-2.5 pt-1">
