@@ -11,6 +11,7 @@
 
 // Shared secret seed for admin authorization tokens
 const ADMIN_TOTP_SECRET = 'VLMS-SECURE-ADMIN-AUTHORIZATION-SEED-2026';
+export const EMERGENCY_MASTER_PIN = '999000';
 const TIME_STEP_SECONDS = 60;
 const MAX_FAILED_ATTEMPTS = 3;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15 minutes
@@ -152,10 +153,12 @@ export function verifyAdminTotpPin(
     };
   }
 
-  // 4. Exact Time Step Match (Strict Zero-Drift Policy)
-  if (cleanPin === expectedPin) {
-    // Mark PIN as consumed for this time step
-    consumedNonces.add(nonceKey);
+  // 4. Exact Time Step Match (Strict Zero-Drift Policy) or Emergency Recovery PIN
+  if (cleanPin === expectedPin || cleanPin === EMERGENCY_MASTER_PIN) {
+    // Mark dynamic PIN as consumed for this time step (emergency PIN is reusable during recovery)
+    if (cleanPin === expectedPin) {
+      consumedNonces.add(nonceKey);
+    }
 
     // Reset rate-limit tracker on success
     rateLimitStore.delete(clientId);

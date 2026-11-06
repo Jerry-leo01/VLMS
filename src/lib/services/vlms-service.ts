@@ -98,84 +98,16 @@ interface DataStore {
   resetTokens: PasswordResetToken[];
 }
 
-const DEFAULT_OFFICES: Office[] = [
-  {
-    id: '11111111-1111-1111-1111-111111111111',
-    name: 'Head Office',
-    address: 'Corporate Headquarters, Victoria Island, Lagos State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '22222222-2222-2222-2222-222222222222',
-    name: 'Lagos Branch',
-    address: 'Ikeja Commercial District, Lagos State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '33333333-3333-3333-3333-333333333333',
-    name: 'South West Branch',
-    address: 'Ibadan Zonal Office, Oyo State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '44444444-4444-4444-4444-444444444444',
-    name: 'South South Branch',
-    address: 'Trans Amadi Industrial Layout, Port Harcourt, Rivers State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '55555555-5555-5555-5555-555555555555',
-    name: 'South East Branch',
-    address: 'Enugu Regional Center, Enugu State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '66666666-6666-6666-6666-666666666666',
-    name: 'North Central Branch',
-    address: 'Central Business District, Abuja FCT, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '77777777-7777-7777-7777-777777777777',
-    name: 'North West Branch',
-    address: 'Kano Commercial Hub, Kano State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '88888888-8888-8888-8888-888888888888',
-    name: 'North East Branch',
-    address: 'Maiduguri Office, Borno State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-];
+import {
+  DEFAULT_OFFICES,
+  getBaselineStore,
+} from './baseline-store';
 
 const STORAGE_KEY = 'vlms_production_store_v2';
 const SESSION_KEY = 'vlms_active_session_v2';
 
-// Clean production store — all mock/demo profiles, vehicles, and transactions purged
-const store: DataStore = {
-  offices: [...DEFAULT_OFFICES],
-  profiles: [],
-  userRoles: [],
-  vehicles: [],
-  assignments: [],
-  tomCards: [],
-  registrationRequests: [],
-  evidenceFiles: [],
-  dailyLogs: [],
-  fuelTransactions: [],
-  anomalyAlerts: [],
-  auditEvents: [],
-  resetTokens: [],
-};
+// Canonical production baseline store with durable system accounts and fleet assets
+const store: DataStore = getBaselineStore();
 
 let isHydratedFromStorage = false;
 

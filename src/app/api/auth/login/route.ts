@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { verifyPassword } from '@/lib/security/password';
 import { normalizePlateNumber } from '@/lib/utils';
+import { getBaselineStore } from '@/lib/services/baseline-store';
 import fs from 'fs';
 import path from 'path';
 
@@ -9,12 +10,23 @@ const DATA_DIR = path.join(process.cwd(), '.data');
 const DATA_FILE = path.join(DATA_DIR, 'vlms_store.json');
 
 function getLocalStore() {
+  const baseline = getBaselineStore();
   try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    if (!fs.existsSync(DATA_FILE)) return null;
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
+    if (!fs.existsSync(DATA_FILE)) return baseline;
+    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return {
+      ...baseline,
+      ...parsed,
+      profiles: Array.from(new Map([...baseline.profiles, ...(parsed.profiles || [])].map((p) => [p.id, p])).values()),
+      userRoles: Array.from(new Map([...baseline.userRoles, ...(parsed.userRoles || [])].map((r) => [r.userId, r])).values()),
+      vehicles: Array.from(new Map([...baseline.vehicles, ...(parsed.vehicles || [])].map((v) => [v.id, v])).values()),
+      assignments: Array.from(new Map([...baseline.assignments, ...(parsed.assignments || [])].map((a) => [a.id, a])).values()),
+      tomCards: Array.from(new Map([...baseline.tomCards, ...(parsed.tomCards || [])].map((t) => [t.id, t])).values()),
+    };
   } catch {
-    return null;
+    return baseline;
   }
 }
 

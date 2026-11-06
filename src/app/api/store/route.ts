@@ -1,69 +1,40 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getBaselineStore, DEFAULT_OFFICES } from '@/lib/services/baseline-store';
 import fs from 'fs';
 import path from 'path';
 
 const DATA_DIR = path.join(process.cwd(), '.data');
 const DATA_FILE = path.join(DATA_DIR, 'vlms_store.json');
 
-const DEFAULT_OFFICES = [
-  {
-    id: '11111111-1111-1111-1111-111111111111',
-    name: 'Head Office',
-    address: 'Corporate Headquarters, Victoria Island, Lagos State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '22222222-2222-2222-2222-222222222222',
-    name: 'Lagos Branch',
-    address: 'Ikeja Commercial District, Lagos State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '33333333-3333-3333-3333-333333333333',
-    name: 'South West Branch',
-    address: 'Ibadan Zonal Office, Oyo State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '44444444-4444-4444-4444-444444444444',
-    name: 'South South Branch',
-    address: 'Trans Amadi Industrial Layout, Port Harcourt, Rivers State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '55555555-5555-5555-5555-555555555555',
-    name: 'South East Branch',
-    address: 'Enugu Regional Center, Enugu State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '66666666-6666-6666-6666-666666666666',
-    name: 'North Central Branch',
-    address: 'Central Business District, Abuja FCT, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '77777777-7777-7777-7777-777777777777',
-    name: 'North West Branch',
-    address: 'Kano Commercial Hub, Kano State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-  {
-    id: '88888888-8888-8888-8888-888888888888',
-    name: 'North East Branch',
-    address: 'Maiduguri Office, Borno State, Nigeria',
-    is_active: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-  },
-];
+function mergeWithBaseline(current: any) {
+  const baseline = getBaselineStore();
+  const mergeById = (existingArr: any[] = [], baselineArr: any[] = [], key: string = 'id') => {
+    const map = new Map();
+    for (const item of baselineArr) {
+      if (item && item[key]) map.set(item[key], item);
+    }
+    for (const item of existingArr) {
+      if (item && item[key]) {
+        const prev = map.get(item[key]);
+        map.set(item[key], { ...(prev || {}), ...item });
+      }
+    }
+    return Array.from(map.values());
+  };
+
+  return {
+    ...baseline,
+    ...current,
+    offices: current?.offices && current.offices.length > 0 ? current.offices : baseline.offices,
+    profiles: mergeById(current?.profiles, baseline.profiles),
+    userRoles: mergeById(current?.userRoles, baseline.userRoles, 'userId'),
+    vehicles: mergeById(current?.vehicles, baseline.vehicles),
+    assignments: mergeById(current?.assignments, baseline.assignments),
+    tomCards: mergeById(current?.tomCards, baseline.tomCards),
+    registrationRequests: mergeById(current?.registrationRequests, baseline.registrationRequests),
+  };
+}
 
 function readServerStore() {
   try {
@@ -71,28 +42,16 @@ function readServerStore() {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     if (!fs.existsSync(DATA_FILE)) {
-      const initial = {
-        offices: DEFAULT_OFFICES,
-        profiles: [],
-        userRoles: [],
-        vehicles: [],
-        assignments: [],
-        tomCards: [],
-        registrationRequests: [],
-        evidenceFiles: [],
-        dailyLogs: [],
-        fuelTransactions: [],
-        anomalyAlerts: [],
-        auditEvents: [],
-        resetTokens: [],
-      };
+      const initial = getBaselineStore();
       fs.writeFileSync(DATA_FILE, JSON.stringify(initial, null, 2), 'utf-8');
       return initial;
     }
     const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    const enriched = mergeWithBaseline(parsed);
+    return enriched;
   } catch {
-    return null;
+    return getBaselineStore();
   }
 }
 
@@ -101,8 +60,9 @@ function writeServerStore(data: Record<string, unknown>) {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
+    const enriched = mergeWithBaseline(data);
     const tempFile = `${DATA_FILE}.tmp`;
-    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
+    fs.writeFileSync(tempFile, JSON.stringify(enriched, null, 2), 'utf-8');
     fs.renameSync(tempFile, DATA_FILE);
     return true;
   } catch {
@@ -162,7 +122,7 @@ export async function GET() {
         resetTokens: [],
       };
 
-      return NextResponse.json({ data: cloudStore });
+      return NextResponse.json({ data: mergeWithBaseline(cloudStore) });
     } catch (err) {
       console.error('Failed to query Supabase store:', err);
     }

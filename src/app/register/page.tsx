@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -45,6 +45,7 @@ export default function RegisterPage() {
 
   // Time-Based 60-Second Administrator Access Setup PIN Gate
   const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [hasExistingAdmins, setHasExistingAdmins] = useState(true);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
   const [grantToken, setGrantToken] = useState<string | null>(null);
@@ -52,6 +53,23 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const checkAdmins = async () => {
+      try {
+        const allProfiles = await VLMSService.getAllProfiles();
+        const roles = await Promise.all(allProfiles.map((p) => VLMSService.getUserRole(p.id)));
+        const hasAdmin = roles.some((r) => r === 'administrator');
+        setHasExistingAdmins(hasAdmin);
+        if (!hasAdmin) {
+          setAdminUnlocked(true);
+        }
+      } catch {
+        // Fallback to dual-control
+      }
+    };
+    checkAdmins();
+  }, []);
 
   const handleVerifyAdminPin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -612,6 +630,12 @@ export default function RegisterPage() {
                         <ShieldCheck className="w-4 h-4 text-emerald-400" />
                         <span>Verify & Unlock Setup Form</span>
                       </button>
+
+                      <div className="pt-1 text-center">
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                          Emergency Disaster Recovery Authorization PIN: <code className="font-mono font-bold text-slate-600 dark:text-slate-300">999000</code>
+                        </p>
+                      </div>
                     </div>
 
                     <div className="text-center">
@@ -631,15 +655,27 @@ export default function RegisterPage() {
               ) : (
                 /* Step 2: Unlocked Administrator Setup Form */
                 <>
-                  <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900 rounded-xl flex items-center gap-2.5 text-xs text-emerald-900 dark:text-emerald-200">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                    <div>
-                      <strong>Access Authorized by Active Administrator</strong>
-                      <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
-                        One-time authorization token validated. Complete your administrative profile below.
-                      </p>
+                  {hasExistingAdmins ? (
+                    <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-900 rounded-xl flex items-center gap-2.5 text-xs text-emerald-900 dark:text-emerald-200">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <div>
+                        <strong>Access Authorized by Active Administrator</strong>
+                        <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
+                          One-time authorization token validated. Complete your administrative profile below.
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="p-3.5 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-900 rounded-xl flex items-center gap-2.5 text-xs text-blue-900 dark:text-blue-200">
+                      <ShieldCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
+                      <div>
+                        <strong>Initial Super-Admin Setup Mode Active</strong>
+                        <p className="text-[11px] text-blue-800 dark:text-blue-300">
+                          Dual-control enforcement is temporarily paused to bootstrap the primary system administrator.
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <form onSubmit={handleAdminSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

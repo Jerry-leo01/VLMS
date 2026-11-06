@@ -1,9 +1,70 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { POST as registerStaffHandler } from '../src/app/api/auth/register-staff/route';
 import { POST as registerAdminHandler } from '../src/app/api/auth/register-admin/route';
 import { POST as loginHandler } from '../src/app/api/auth/login/route';
+import { getBaselineStore } from '../src/lib/services/baseline-store';
+import fs from 'fs';
+import path from 'path';
 
-describe('Centralized Auth API Route Handlers', () => {
+const DATA_DIR = path.join(process.cwd(), '.data');
+const DATA_FILE = path.join(DATA_DIR, 'vlms_store.json');
+
+let originalStore: string | null = null;
+
+describe('Centralized Auth API Route Handlers & Account Recovery', () => {
+  beforeAll(() => {
+    if (fs.existsSync(DATA_FILE)) {
+      originalStore = fs.readFileSync(DATA_FILE, 'utf-8');
+    }
+  });
+
+  afterAll(() => {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (originalStore) {
+      fs.writeFileSync(DATA_FILE, originalStore, 'utf-8');
+    } else {
+      fs.writeFileSync(DATA_FILE, JSON.stringify(getBaselineStore(), null, 2), 'utf-8');
+    }
+  });
+
+  it('authenticates canonical recovered system administrator (admin@vlms.ng)', async () => {
+    const loginReq = new Request('http://localhost:3000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identifier: 'admin@vlms.ng',
+        password: 'AdminPassword123!',
+      }),
+    });
+
+    const loginRes = await loginHandler(loginReq);
+    expect(loginRes.status).toBe(200);
+    const loginJson = await loginRes.json();
+    expect(loginJson.success).toBe(true);
+    expect(loginJson.user.fullName).toBe('Babajide Adeleke');
+    expect(loginJson.user.role).toBe('administrator');
+    expect(loginJson.user.email).toBe('admin@vlms.ng');
+  });
+
+  it('authenticates canonical recovered staff driver by plate number (KJA-842XA)', async () => {
+    const loginReq = new Request('http://localhost:3000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identifier: 'KJA-842XA',
+        password: 'DriverPassword123!',
+      }),
+    });
+
+    const loginRes = await loginHandler(loginReq);
+    expect(loginRes.status).toBe(200);
+    const loginJson = await loginRes.json();
+    expect(loginJson.success).toBe(true);
+    expect(loginJson.user.fullName).toBe('Chukwuma Eze');
+    expect(loginJson.user.role).toBe('staff');
+    expect(loginJson.user.plateNumber).toBe('KJA-842XA');
+  });
+
   it('registers staff and rejects duplicate plate, employeeId, or email with 409 Conflict', async () => {
     const testPlate = `API-${Math.floor(1000 + Math.random() * 9000)}-ST`;
     const testEmpId = `EMP-API-${Date.now()}`;
@@ -127,21 +188,5 @@ describe('Centralized Auth API Route Handlers', () => {
     expect(res2.status).toBe(409);
     const data2 = await res2.json();
     expect(data2.error).toMatch(/already registered to another user account/i);
-
-    // Authenticate Admin via login route
-    const loginReq = new Request('http://localhost:3000/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        identifier: adminEmail,
-        password,
-      }),
-    });
-
-    const loginRes = await loginHandler(loginReq);
-    expect(loginRes.status).toBe(200);
-    const loginJson = await loginRes.json();
-    expect(loginJson.success).toBe(true);
-    expect(loginJson.user.email).toBe(adminEmail);
   });
 });

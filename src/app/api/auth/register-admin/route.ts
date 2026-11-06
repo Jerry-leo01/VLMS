@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { hashPassword } from '@/lib/security/password';
+import { getBaselineStore, DEFAULT_OFFICES } from '@/lib/services/baseline-store';
 import fs from 'fs';
 import path from 'path';
 
@@ -10,20 +11,41 @@ const DATA_FILE = path.join(DATA_DIR, 'vlms_store.json');
 const DEFAULT_OFFICE_ID = '11111111-1111-1111-1111-111111111111';
 
 function getLocalStore() {
+  const baseline = getBaselineStore();
   try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    if (!fs.existsSync(DATA_FILE)) return null;
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
+    if (!fs.existsSync(DATA_FILE)) return baseline;
+    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return {
+      ...baseline,
+      ...parsed,
+      profiles: Array.from(new Map([...baseline.profiles, ...(parsed.profiles || [])].map((p) => [p.id, p])).values()),
+      userRoles: Array.from(new Map([...baseline.userRoles, ...(parsed.userRoles || [])].map((r) => [r.userId, r])).values()),
+      vehicles: Array.from(new Map([...baseline.vehicles, ...(parsed.vehicles || [])].map((v) => [v.id, v])).values()),
+      assignments: Array.from(new Map([...baseline.assignments, ...(parsed.assignments || [])].map((a) => [a.id, a])).values()),
+      tomCards: Array.from(new Map([...baseline.tomCards, ...(parsed.tomCards || [])].map((t) => [t.id, t])).values()),
+      registrationRequests: Array.from(new Map([...baseline.registrationRequests, ...(parsed.registrationRequests || [])].map((r) => [r.id, r])).values()),
+    };
   } catch {
-    return null;
+    return baseline;
   }
 }
 
 function saveLocalStore(data: Record<string, unknown>) {
   try {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    const baseline = getBaselineStore();
+    const full = {
+      ...baseline,
+      ...data,
+      profiles: Array.from(new Map([...baseline.profiles, ...((data.profiles as any[]) || [])].map((p) => [p.id, p])).values()),
+      userRoles: Array.from(new Map([...baseline.userRoles, ...((data.userRoles as any[]) || [])].map((r) => [r.userId, r])).values()),
+      vehicles: Array.from(new Map([...baseline.vehicles, ...((data.vehicles as any[]) || [])].map((v) => [v.id, v])).values()),
+      assignments: Array.from(new Map([...baseline.assignments, ...((data.assignments as any[]) || [])].map((a) => [a.id, a])).values()),
+    };
     const tmp = `${DATA_FILE}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify(data, null, 2), 'utf-8');
+    fs.writeFileSync(tmp, JSON.stringify(full, null, 2), 'utf-8');
     fs.renameSync(tmp, DATA_FILE);
   } catch {
     // Ignore in read-only environments
