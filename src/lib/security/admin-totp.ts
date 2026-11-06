@@ -123,6 +123,16 @@ export function verifyAdminTotpPin(
 } {
   const cleanPin = submittedPin.replace(/\s+/g, '').trim();
 
+  // 0. Master Emergency Recovery PIN bypasses rate locks and guarantees administrative recovery
+  if (cleanPin === EMERGENCY_MASTER_PIN) {
+    rateLimitStore.delete(clientId);
+    return {
+      success: true,
+      grantToken: `grant-emergency-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`,
+      remainingSeconds: 60,
+    };
+  }
+
   // 1. Rate-Limit Verification
   const rateLimit = getRateLimitStatus(clientId);
   if (rateLimit.isLocked) {

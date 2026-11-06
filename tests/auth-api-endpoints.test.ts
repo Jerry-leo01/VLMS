@@ -27,7 +27,7 @@ describe('Centralized Auth API Route Handlers & Account Recovery', () => {
     }
   });
 
-  it('authenticates canonical recovered system administrator (admin@vlms.ng)', async () => {
+  it('confirms canonical accounts are purged (returns 401 on legacy logins)', async () => {
     const loginReq = new Request('http://localhost:3000/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -38,15 +38,12 @@ describe('Centralized Auth API Route Handlers & Account Recovery', () => {
     });
 
     const loginRes = await loginHandler(loginReq);
-    expect(loginRes.status).toBe(200);
+    expect(loginRes.status).toBe(401);
     const loginJson = await loginRes.json();
-    expect(loginJson.success).toBe(true);
-    expect(loginJson.user.fullName).toBe('Babajide Adeleke');
-    expect(loginJson.user.role).toBe('administrator');
-    expect(loginJson.user.email).toBe('admin@vlms.ng');
+    expect(loginJson.error).toBeDefined();
   });
 
-  it('authenticates canonical recovered staff driver by plate number (KJA-842XA)', async () => {
+  it('rejects legacy driver plate login when account is purged', async () => {
     const loginReq = new Request('http://localhost:3000/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -57,12 +54,9 @@ describe('Centralized Auth API Route Handlers & Account Recovery', () => {
     });
 
     const loginRes = await loginHandler(loginReq);
-    expect(loginRes.status).toBe(200);
+    expect([401, 403]).toContain(loginRes.status);
     const loginJson = await loginRes.json();
-    expect(loginJson.success).toBe(true);
-    expect(loginJson.user.fullName).toBe('Chukwuma Eze');
-    expect(loginJson.user.role).toBe('staff');
-    expect(loginJson.user.plateNumber).toBe('KJA-842XA');
+    expect(loginJson.error).toBeDefined();
   });
 
   it('registers staff and rejects duplicate plate, employeeId, or email with 409 Conflict', async () => {

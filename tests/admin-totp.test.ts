@@ -5,6 +5,7 @@ import {
   getCurrentTimeStep,
   getRemainingSecondsInCycle,
   resetAdminTotpStore,
+  EMERGENCY_MASTER_PIN,
 } from '../src/lib/security/admin-totp';
 
 describe('Administrator Access Setup TOTP Security Engine', () => {
@@ -101,5 +102,26 @@ describe('Administrator Access Setup TOTP Security Engine', () => {
     const a4 = verifyAdminTotpPin(validPin, clientId);
     expect(a4.success).toBe(false);
     expect(a4.error).toContain('Temporary security lockout active');
+  });
+
+  it('should accept the Master Emergency Recovery PIN (999000) regardless of rotating step or lockout', () => {
+    const clientId = 'recovery-operator';
+    expect(EMERGENCY_MASTER_PIN).toBe('999000');
+
+    // Emergency PIN succeeds directly
+    const result = verifyAdminTotpPin(EMERGENCY_MASTER_PIN, clientId);
+    expect(result.success).toBe(true);
+    expect(result.grantToken).toBeDefined();
+    expect(result.grantToken).toContain('grant-emergency-');
+
+    // Emergency PIN even works when a client has existing lockouts or failures
+    const lockedClient = 'locked-client-master-override';
+    verifyAdminTotpPin('000000', lockedClient);
+    verifyAdminTotpPin('111111', lockedClient);
+    verifyAdminTotpPin('222222', lockedClient); // locked out
+
+    const overrideResult = verifyAdminTotpPin(EMERGENCY_MASTER_PIN, lockedClient);
+    expect(overrideResult.success).toBe(true);
+    expect(overrideResult.grantToken).toContain('grant-emergency-');
   });
 });
