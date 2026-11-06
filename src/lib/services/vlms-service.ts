@@ -248,6 +248,12 @@ function fuelTransactionsToMap(txs: FuelTransaction[]) {
   return map;
 }
 
+function isBrowserRuntime(): boolean {
+  if (typeof window === 'undefined' || typeof fetch !== 'function') return false;
+  if (typeof process !== 'undefined' && process.env?.VITEST) return false;
+  return true;
+}
+
 function syncFromLocalStorage(): void {
   if (typeof window === 'undefined') return;
   if (!isHydratedFromStorage) {
@@ -264,7 +270,7 @@ function syncFromLocalStorage(): void {
   }
 
   // Trigger non-blocking background server sync
-  if (typeof window !== 'undefined' && typeof fetch === 'function') {
+  if (isBrowserRuntime()) {
     VLMSService.syncWithServer().catch(() => {});
   }
 }
@@ -274,7 +280,7 @@ function persistToLocalStorage(): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
     // Asynchronously dispatch to server API route for cross-device persistence
-    if (typeof fetch === 'function') {
+    if (isBrowserRuntime()) {
       fetch('/api/store', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -560,18 +566,54 @@ export const VLMSService = {
       }
     }
 
-    const passwordHash = input.password ? await hashPassword(input.password) : null;
-
     const existing = store.profiles.find((p) => p.email?.toLowerCase() === normalizedEmail);
     if (existing) {
-      if (passwordHash && !existing.password_hash) {
-        existing.password_hash = passwordHash;
-        persistToLocalStorage();
-      }
-      const existingRole = (await this.getUserRole(existing.id)) || 'administrator';
-      const hydrated = (await this.getStaffProfile(existing.id)) || existing;
-      return { profile: hydrated, role: existingRole };
+      throw new Error('Email is already registered to another user account.');
     }
+
+    // Attempt centralized server registration for cross-device persistence
+    if (isBrowserRuntime()) {
+      try {
+        const res = await fetch('/api/auth/register-admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fullName: input.fullName,
+            employeeId: input.employeeId,
+            email: normalizedEmail,
+            phoneNumber: input.phoneNumber,
+            officeId: input.officeId,
+            role: input.role,
+            password: input.password,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Administrator registration failed.');
+        }
+
+        const json = await res.json();
+        if (json?.data) {
+          const { profile, role } = json.data;
+          if (profile) {
+            const existingIdx = store.profiles.findIndex((p) => p.id === profile.id);
+            if (existingIdx >= 0) store.profiles[existingIdx] = profile;
+            else store.profiles.push(profile);
+          }
+          store.userRoles.push({ userId: profile.id, role });
+          persistToLocalStorage();
+          return { profile, role };
+        }
+      } catch (err: unknown) {
+        const errorObj = err as Error;
+        if (errorObj.message && !errorObj.message.includes('fetch failed')) {
+          throw errorObj;
+        }
+      }
+    }
+
+    const passwordHash = input.password ? await hashPassword(input.password) : null;
 
     const assignedRole: UserRole = input.role || 'administrator';
     const userId = `p-adm-${Date.now()}`;
@@ -1368,6 +1410,62 @@ export const VLMSService = {
       );
       if (existingProfileWithEmpId) {
         throw new Error(`Staff ID "${cleanEmpId}" is already registered to another user account. Kindly sign in.`);
+      }
+    }
+
+    if (input.email && input.email.trim()) {
+      const cleanEmail = input.email.trim().toLowerCase();
+      const existingProfileWithEmail = store.profiles.find(
+        (p) => p.email && p.email.trim().toLowerCase() === cleanEmail
+      );
+      if (existingProfileWithEmail) {
+        throw new Error('Email is already registered to another user account. Kindly sign in.');
+      }
+    }
+
+    // Attempt centralized server registration for cross-device persistence
+    if (isBrowserRuntime()) {
+      try {
+        const res = await fetch('/api/auth/register-staff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fullName: input.fullName,
+            employeeId: input.employeeId,
+            email: input.email,
+            phoneNumber: input.phoneNumber,
+            plateNumber: normalizedPlate,
+            password: input.password,
+            officeId: input.officeId,
+            carName: input.carName,
+            carModel: input.carModel,
+            carYear: input.carYear || input.year,
+            tomCardNumber: input.tomCardNumber,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Registration failed.');
+        }
+
+        const json = await res.json();
+        if (json?.data) {
+          const { profile, vehicle, assignment, tomCard, registrationRequest } = json.data;
+          if (profile) store.profiles.push(profile);
+          if (vehicle) store.vehicles.push(vehicle);
+          if (assignment) store.assignments.push(assignment);
+          if (tomCard) store.tomCards.push(tomCard);
+          if (registrationRequest) store.registrationRequests.push(registrationRequest);
+          store.userRoles.push({ userId: profile.id, role: 'staff' });
+          persistToLocalStorage();
+          return registrationRequest;
+        }
+      } catch (err: unknown) {
+        const errorObj = err as Error;
+        if (errorObj.message && !errorObj.message.includes('fetch failed')) {
+          throw errorObj;
+        }
       }
     }
 

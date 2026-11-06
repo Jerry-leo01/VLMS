@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import fs from 'fs';
 import path from 'path';
 
@@ -90,8 +91,7 @@ function readServerStore() {
     }
     const raw = fs.readFileSync(DATA_FILE, 'utf-8');
     return JSON.parse(raw);
-  } catch (err) {
-    console.error('Error reading server store:', err);
+  } catch {
     return null;
   }
 }
@@ -105,13 +105,70 @@ function writeServerStore(data: Record<string, unknown>) {
     fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf-8');
     fs.renameSync(tempFile, DATA_FILE);
     return true;
-  } catch (err) {
-    console.error('Error writing server store:', err);
+  } catch {
     return false;
   }
 }
 
 export async function GET() {
+  const supabase = getSupabaseAdmin();
+
+  if (supabase) {
+    try {
+      const [
+        { data: profiles },
+        { data: roles },
+        { data: vehicles },
+        { data: assignments },
+        { data: tomCards },
+        { data: regRequests },
+        { data: dailyLogs },
+        { data: fuelTxs },
+        { data: anomalies },
+        { data: auditEvents },
+        { data: offices },
+      ] = await Promise.all([
+        supabase.from('profiles').select('*'),
+        supabase.from('user_roles').select('*'),
+        supabase.from('vehicles').select('*'),
+        supabase.from('vehicle_assignments').select('*'),
+        supabase.from('tom_cards').select('*'),
+        supabase.from('registration_requests').select('*'),
+        supabase.from('daily_logs').select('*'),
+        supabase.from('fuel_transactions').select('*'),
+        supabase.from('anomaly_alerts').select('*'),
+        supabase.from('audit_events').select('*'),
+        supabase.from('offices').select('*'),
+      ]);
+
+      const formattedUserRoles = (roles || []).map((r: any) => ({
+        userId: r.user_id,
+        role: r.role,
+      }));
+
+      const cloudStore = {
+        offices: offices && offices.length > 0 ? offices : DEFAULT_OFFICES,
+        profiles: profiles || [],
+        userRoles: formattedUserRoles,
+        vehicles: vehicles || [],
+        assignments: assignments || [],
+        tomCards: tomCards || [],
+        registrationRequests: regRequests || [],
+        evidenceFiles: [],
+        dailyLogs: dailyLogs || [],
+        fuelTransactions: fuelTxs || [],
+        anomalyAlerts: anomalies || [],
+        auditEvents: auditEvents || [],
+        resetTokens: [],
+      };
+
+      return NextResponse.json({ data: cloudStore });
+    } catch (err) {
+      console.error('Failed to query Supabase store:', err);
+    }
+  }
+
+  // Fallback to local server store
   const store = readServerStore();
   if (!store) {
     return NextResponse.json({ error: 'Failed to read server store' }, { status: 500 });

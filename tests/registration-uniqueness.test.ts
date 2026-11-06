@@ -116,6 +116,71 @@ describe('Registration System Uniqueness Constraints', () => {
     ).rejects.toThrow(/already registered to another user account/i);
   });
 
+  it('prevents duplicate admin registration with the same corporate Email address', async () => {
+    const sharedAdminEmail = `corp-admin-${Date.now()}@testcorp.com`;
+    const empId1 = `ADM-A-${Date.now()}`;
+
+    // First admin registration succeeds
+    await VLMSService.registerAdminAccount({
+      fullName: 'Primary Admin',
+      employeeId: empId1,
+      email: sharedAdminEmail,
+      phoneNumber: '+234 810 111 2222',
+      role: 'administrator',
+      password: 'AdminPassword123!',
+    });
+
+    // Second admin registration with same email must be rejected
+    const empId2 = `ADM-B-${Date.now()}`;
+    await expect(
+      VLMSService.registerAdminAccount({
+        fullName: 'Duplicate Admin',
+        employeeId: empId2,
+        email: sharedAdminEmail,
+        phoneNumber: '+234 810 333 4444',
+        role: 'administrator',
+        password: 'AdminPassword123!',
+      })
+    ).rejects.toThrow(/already registered to another user account/i);
+  });
+
+  it('prevents duplicate staff registration with the same Email address', async () => {
+    const sharedStaffEmail = `driver-${Date.now()}@testcorp.com`;
+    const empId1 = `EMP-M-${Date.now()}`;
+    const plate1 = `PLT-${Math.floor(1000 + Math.random() * 9000)}-M1`;
+
+    await VLMSService.submitRegistration({
+      fullName: 'First Staff Driver',
+      employeeId: empId1,
+      email: sharedStaffEmail,
+      phoneNumber: '+234 811 111 2222',
+      plateNumber: plate1,
+      carName: 'Toyota Corolla',
+      carModel: 'Corolla LE',
+      carYear: 2023,
+      password: 'SecurePassword123!',
+      requestedRole: 'staff',
+    });
+
+    const empId2 = `EMP-N-${Date.now()}`;
+    const plate2 = `PLT-${Math.floor(1000 + Math.random() * 9000)}-N2`;
+
+    await expect(
+      VLMSService.submitRegistration({
+        fullName: 'Second Staff Driver',
+        employeeId: empId2,
+        email: sharedStaffEmail, // Duplicate Email
+        phoneNumber: '+234 811 333 4444',
+        plateNumber: plate2,
+        carName: 'Honda Civic',
+        carModel: 'Civic EX',
+        carYear: 2024,
+        password: 'SecurePassword123!',
+        requestedRole: 'staff',
+      })
+    ).rejects.toThrow(/already registered to another user account/i);
+  });
+
   it('prevents vehicle registration assignment when staff member is already assigned to an active vehicle', async () => {
     const staffEmpId = `EMP-ASSIGN-${Date.now()}`;
     const staffEmail = `assigned-staff-${Date.now()}@testcorp.com`;

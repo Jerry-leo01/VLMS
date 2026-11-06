@@ -35,6 +35,58 @@ export default function LoginPage() {
       const isEmail = trimmed.includes('@');
       const supabase = createClient();
 
+      // 1. Centralized Cloud Authentication (Cross-Device Persistent Check)
+      try {
+        const remoteRes = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier: trimmed, password }),
+        });
+
+        if (remoteRes.ok) {
+          const loginData = await remoteRes.json();
+          if (loginData?.user) {
+            const { userId, role, fullName, email: userEmail, plateNumber, vehicleId } = loginData.user;
+            VLMSService.setActiveSession({
+              userId,
+              role,
+              fullName,
+              email: userEmail,
+              plateNumber,
+              vehicleId,
+            });
+
+            VLMSService.syncWithServer().catch(() => {});
+
+            if (
+              role === 'administrator' ||
+              role === 'fleet_manager' ||
+              role === 'department_head' ||
+              role === 'auditor'
+            ) {
+              router.push('/management');
+            } else {
+              router.push('/staff');
+            }
+            return;
+          }
+        } else if (remoteRes.status === 401 || remoteRes.status === 403 || remoteRes.status === 404) {
+          const errJson = await remoteRes.json().catch(() => ({}));
+          if (errJson.error) {
+            throw new Error(errJson.error);
+          }
+        }
+      } catch (cloudErr: unknown) {
+        const cloudErrObj = cloudErr as Error;
+        if (
+          cloudErrObj.message &&
+          !cloudErrObj.message.includes('fetch failed') &&
+          !cloudErrObj.message.includes('Failed to fetch')
+        ) {
+          throw cloudErrObj;
+        }
+      }
+
       if (isEmail) {
         // 1. Check local / hybrid production store first
         let localProfile = await VLMSService.getStaffProfileByEmail(trimmed);
