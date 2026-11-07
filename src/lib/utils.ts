@@ -17,6 +17,18 @@ export function normalizePlateNumber(plate: string): string {
 }
 
 /**
+ * Accurately and flexibly matches two vehicle plate numbers regardless of spaces,
+ * hyphens, or letter case (e.g. 'KJA-842XA' matches 'kja 842 xa' and 'KJA842XA').
+ */
+export function matchPlateNumbers(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  if (normalizePlateNumber(a) === normalizePlateNumber(b)) return true;
+  const cleanA = a.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  const cleanB = b.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  return cleanA === cleanB && cleanA.length > 0;
+}
+
+/**
  * Formats a number as Nigerian Naira (NGN) or specified currency
  */
 export function formatCurrency(amount: number, currency: string = 'NGN'): string {

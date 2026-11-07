@@ -14,6 +14,8 @@ import {
   Lock,
   ArrowRight,
   Clock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { normalizePlateNumber } from '@/lib/utils';
 import { VLMSService } from '@/lib/services/vlms-service';
@@ -35,6 +37,8 @@ export default function RegisterPage() {
   const [carModel, setCarModel] = useState('');
   const [carYear, setCarYear] = useState('2023');
   const [password, setPassword] = useState('');
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
 
   // Admin Registration State
@@ -508,15 +512,25 @@ export default function RegisterPage() {
                       >
                         Password <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        id="staffPassword"
-                        type="password"
-                        required
-                        minLength={6}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
-                      />
+                      <div className="mt-1 relative">
+                        <input
+                          id="staffPassword"
+                          type={showStaffPassword ? 'text' : 'password'}
+                          required
+                          minLength={6}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="w-full pl-3.5 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowStaffPassword((prev) => !prev)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none"
+                          aria-label={showStaffPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showStaffPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                       <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
                         Enter at least 6 characters for account security.
                       </p>
@@ -815,15 +829,25 @@ export default function RegisterPage() {
                       >
                         Password <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        id="admPasswordInput"
-                        type="password"
-                        required
-                        minLength={6}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="mt-1 w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800"
-                      />
+                      <div className="mt-1 relative">
+                        <input
+                          id="admPasswordInput"
+                          type={showAdminPassword ? 'text' : 'password'}
+                          required
+                          minLength={6}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="w-full pl-3.5 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAdminPassword((prev) => !prev)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none"
+                          aria-label={showAdminPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                       <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
                         At least 6 characters required for administrator sign in.
                       </p>

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Car, AlertCircle, ArrowRight } from 'lucide-react';
+import { Car, AlertCircle, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { normalizePlateNumber } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { createClient } from '@/lib/supabase/client';
@@ -15,6 +15,7 @@ export default function LoginPage() {
   // Unified Sign In State (Drivers enter plate number; Admins enter corporate email)
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,16 +73,19 @@ export default function LoginPage() {
           }
         } else if (remoteRes.status === 401 || remoteRes.status === 403 || remoteRes.status === 404) {
           const errJson = await remoteRes.json().catch(() => ({}));
-          if (errJson.error) {
+          // If error is an explicit password mismatch or 403 restriction, throw immediately
+          if (errJson.error && (errJson.error.toLowerCase().includes('password') || remoteRes.status === 403)) {
             throw new Error(errJson.error);
           }
+          // For 401 "Account not found", continue to local browser cache fallback
         }
       } catch (cloudErr: unknown) {
         const cloudErrObj = cloudErr as Error;
         if (
           cloudErrObj.message &&
           !cloudErrObj.message.includes('fetch failed') &&
-          !cloudErrObj.message.includes('Failed to fetch')
+          !cloudErrObj.message.includes('Failed to fetch') &&
+          !cloudErrObj.message.includes('Account not found')
         ) {
           throw cloudErrObj;
         }
@@ -287,15 +291,23 @@ export default function LoginPage() {
                   Forgot password?
                 </Link>
               </div>
-              <div className="mt-1">
+              <div className="mt-1 relative">
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500 transition-colors"
+                  className="w-full pl-3.5 pr-10 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-sm text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-navy-800 dark:focus:ring-blue-500 transition-colors"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
               <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400 font-medium">
                 Enter your account security password.

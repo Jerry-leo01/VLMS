@@ -139,6 +139,52 @@ describe('Centralized Auth API Route Handlers & Account Recovery', () => {
     const loginJson = await loginRes.json();
     expect(loginJson.success).toBe(true);
     expect(loginJson.user.fullName).toBe('API Staff Member');
+
+    // 5. Authenticate via login route using staff email
+    const loginEmailReq = new Request('http://localhost:3000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identifier: testEmail,
+        password,
+      }),
+    });
+    const loginEmailRes = await loginHandler(loginEmailReq);
+    expect(loginEmailRes.status).toBe(200);
+    const loginEmailJson = await loginEmailRes.json();
+    expect(loginEmailJson.success).toBe(true);
+    expect(loginEmailJson.user.fullName).toBe('API Staff Member');
+    expect(loginEmailJson.user.plateNumber).toBe(testPlate);
+
+    // 6. Authenticate via login route using Employee ID
+    const loginEmpIdReq = new Request('http://localhost:3000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identifier: testEmpId,
+        password,
+      }),
+    });
+    const loginEmpIdRes = await loginHandler(loginEmpIdReq);
+    expect(loginEmpIdRes.status).toBe(200);
+    const loginEmpIdJson = await loginEmpIdRes.json();
+    expect(loginEmpIdJson.success).toBe(true);
+    expect(loginEmpIdJson.user.fullName).toBe('API Staff Member');
+
+    // 7. Authenticate via login route using loose plate format (spaces instead of hyphens)
+    const loosePlate = testPlate.replace(/-/g, ' ');
+    const loginLoosePlateReq = new Request('http://localhost:3000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identifier: loosePlate,
+        password,
+      }),
+    });
+    const loginLooseRes = await loginHandler(loginLoosePlateReq);
+    expect(loginLooseRes.status).toBe(200);
+    const loginLooseJson = await loginLooseRes.json();
+    expect(loginLooseJson.success).toBe(true);
   });
 
   it('registers admin and rejects duplicate email with 409 Conflict', async () => {
@@ -182,5 +228,36 @@ describe('Centralized Auth API Route Handlers & Account Recovery', () => {
     expect(res2.status).toBe(409);
     const data2 = await res2.json();
     expect(data2.error).toMatch(/already registered to another user account/i);
+
+    // Authenticate Admin via Email (mixed case)
+    const adminLoginReq = new Request('http://localhost:3000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identifier: adminEmail.toUpperCase(),
+        password,
+      }),
+    });
+    const adminLoginRes = await loginHandler(adminLoginReq);
+    expect(adminLoginRes.status).toBe(200);
+    const adminLoginJson = await adminLoginRes.json();
+    expect(adminLoginJson.success).toBe(true);
+    expect(adminLoginJson.user.fullName).toBe('Corporate Super Admin');
+    expect(adminLoginJson.user.role).toBe('administrator');
+
+    // Authenticate Admin via Employee ID
+    const adminEmpLoginReq = new Request('http://localhost:3000/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        identifier: adminEmpId,
+        password,
+      }),
+    });
+    const adminEmpLoginRes = await loginHandler(adminEmpLoginReq);
+    expect(adminEmpLoginRes.status).toBe(200);
+    const adminEmpLoginJson = await adminEmpLoginRes.json();
+    expect(adminEmpLoginJson.success).toBe(true);
+    expect(adminEmpLoginJson.user.fullName).toBe('Corporate Super Admin');
   });
 });
