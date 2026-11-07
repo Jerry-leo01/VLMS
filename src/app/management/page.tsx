@@ -33,6 +33,7 @@ import {
 import { AdminTotpGeneratorModal } from '@/components/admin/AdminTotpGeneratorModal';
 import { AdaptiveDatePicker } from '@/components/ui/AdaptiveDatePicker';
 import { DateRangeSelection, getPresetDateRange, isDateInRange } from '@/lib/date-utils';
+import { SafeImage } from '@/components/ui/SafeImage';
 
 export default function ManagementDashboardPage() {
   const [metrics, setMetrics] = useState<DashboardMetrics>({
@@ -406,22 +407,17 @@ export default function ManagementDashboardPage() {
                     onClick={() => setSelectedEvidence(item)}
                     className="group text-left bg-slate-50 hover:bg-white border border-slate-200 hover:border-navy-800 rounded-xl overflow-hidden shadow-xs transition-all flex flex-col"
                   >
-                    <div className="relative aspect-video bg-slate-900 flex items-center justify-center overflow-hidden">
-                      {item.dataUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.dataUrl}
-                          alt={item.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                        />
-                      ) : (
-                        <div className="text-center p-3">
-                          <ImageIcon className="w-6 h-6 text-blue-400 mx-auto mb-1" />
-                          <span className="text-[11px] font-mono text-emerald-400 block font-bold">
-                            {formatOdometer(item.odometerKm)}
-                          </span>
-                        </div>
-                      )}
+                    <div className="relative aspect-video bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+                      <SafeImage
+                        src={item.dataUrl || ''}
+                        alt={item.title}
+                        fallbackType="evidence"
+                        telemetry={{
+                          odoKm: item.odometerKm,
+                          plateNumber: item.vehiclePlate,
+                        }}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
                       <span className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/75 text-white text-[10px] font-semibold">
                         {item.evidenceType === 'fuel_receipt'
                           ? 'Fuel Receipt'
@@ -622,27 +618,17 @@ export default function ManagementDashboardPage() {
               </div>
             </div>
 
-            <div className="aspect-video bg-slate-950 rounded-xl flex items-center justify-center border border-slate-200 overflow-hidden">
-              {selectedEvidence.dataUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={selectedEvidence.dataUrl}
-                  alt={selectedEvidence.title}
-                  className="max-h-full max-w-full object-contain"
-                />
-              ) : (
-                <div className="text-center p-6 text-white">
-                  <span className="text-xs uppercase tracking-wider text-slate-400 block mb-1">
-                    Verified Evidence Record
-                  </span>
-                  <span className="text-2xl font-mono font-bold text-emerald-400">
-                    {formatOdometer(selectedEvidence.odometerKm)}
-                  </span>
-                  <span className="text-sm font-mono text-slate-300 block mt-1">
-                    Vehicle: {selectedEvidence.vehiclePlate}
-                  </span>
-                </div>
-              )}
+            <div className="aspect-video bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <SafeImage
+                src={selectedEvidence.dataUrl || ''}
+                alt={selectedEvidence.title}
+                fallbackType="evidence"
+                telemetry={{
+                  odoKm: selectedEvidence.odometerKm,
+                  plateNumber: selectedEvidence.vehiclePlate,
+                }}
+                className="max-h-full max-w-full object-contain"
+              />
             </div>
 
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs font-mono">

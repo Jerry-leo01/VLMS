@@ -11,6 +11,60 @@ interface CameraCaptureProps {
   captureType?: 'odometer' | 'receipt' | 'general';
 }
 
+// Transcode any image file or dataUrl to a standardized, downsampled JPEG with a white background
+export function transcodeToWebCompatibleJpeg(
+  source: File | string,
+  maxDimension = 1600,
+  quality = 0.82
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const processImage = (srcUrl: string) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height && width > maxDimension) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else if (height > maxDimension) {
+          width = Math.round((width * maxDimension) / height);
+          height = Math.round(maxDimension);
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          return resolve(srcUrl);
+        }
+
+        // Fill background with white to avoid transparent alpha turning black
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const cleanJpeg = canvas.toDataURL('image/jpeg', quality);
+        resolve(cleanJpeg);
+      };
+      img.onerror = () => {
+        resolve(srcUrl);
+      };
+      img.src = srcUrl;
+    };
+
+    if (typeof source === 'string') {
+      processImage(source);
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => processImage(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(source);
+    }
+  });
+}
+
 export function CameraCapture({
   onCapture,
   title = 'Photograph Odometer Dashboard',
@@ -170,9 +224,8 @@ export function CameraCapture({
     }
 
     setIsProcessing(true);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
+    try {
+      const dataUrl = await transcodeToWebCompatibleJpeg(file);
       setCapturedImage(dataUrl);
 
       if (captureType === 'odometer') {
@@ -189,10 +242,12 @@ export function CameraCapture({
         };
         img.src = dataUrl;
       }
-
+    } catch (err) {
+      console.error('Failed to process image file:', err);
+      setErrorMsg('Failed to process image file. Please try another photograph.');
+    } finally {
       setIsProcessing(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleConfirm = async () => {

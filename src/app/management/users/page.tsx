@@ -8,6 +8,7 @@ import { ManagementBottomNav } from '@/components/layout/ManagementBottomNav';
 import { VLMSService } from '@/lib/services/vlms-service';
 import { Profile, Office, UserRole, UserStatus } from '@/types/database';
 import { formatDateTime } from '@/lib/utils';
+import { SafeImage } from '@/components/ui/SafeImage';
 import {
   Users,
   ArrowLeft,
@@ -321,14 +322,24 @@ export default function UsersManagementPage() {
                       className="w-full p-4 sm:p-5 text-left flex items-center justify-between gap-3 hover:bg-slate-50/70 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-navy-950 text-white flex items-center justify-center shrink-0 font-bold text-sm">
-                          {u.full_name
-                            .split(' ')
-                            .map((n) => n[0])
-                            .join('')
-                            .slice(0, 2)
-                            .toUpperCase()}
-                        </div>
+                        <SafeImage
+                          src=""
+                          alt={u.full_name}
+                          fallbackType="avatar"
+                          initials={
+                            u.full_name
+                              ? u.full_name
+                                  .split(' ')
+                                  .filter(Boolean)
+                                  .map((n) => n[0])
+                                  .join('')
+                                  .slice(0, 2)
+                                  .toUpperCase()
+                              : 'ST'
+                          }
+                          className="w-10 h-10 rounded-xl"
+                          containerClassName="w-10 h-10 rounded-xl shrink-0 font-bold text-sm"
+                        />
                         <div className="min-w-0">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
                             Full Name
