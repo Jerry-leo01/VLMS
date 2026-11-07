@@ -79,12 +79,14 @@ export async function POST(request: Request) {
           .ilike('email', cleanEmail)
           .maybeSingle();
 
-        const isSchemaCacheError =
+        const isSchemaOrPermissionError =
           emailCheckErr?.code === 'PGRST204' ||
+          emailCheckErr?.code === '42501' ||
+          emailCheckErr?.message?.includes('permission denied') ||
           emailCheckErr?.message?.includes('schema cache') ||
           emailCheckErr?.message?.includes("column of 'profiles'");
 
-        if (existingEmail && !isSchemaCacheError) {
+        if (existingEmail && !isSchemaOrPermissionError) {
           return NextResponse.json(
             { error: 'Email is already registered to another user account. Kindly sign in.' },
             { status: 409 }
@@ -114,15 +116,17 @@ export async function POST(request: Request) {
         .single();
 
       if (profileErr) {
-        const isInsertSchemaError =
+        const isInsertDbAccessError =
           profileErr.code === 'PGRST204' ||
+          profileErr.code === '42501' ||
+          profileErr.message?.includes('permission denied') ||
           profileErr.message?.includes('schema cache') ||
           profileErr.message?.includes("column of 'profiles'");
 
-        if (!isInsertSchemaError) {
+        if (!isInsertDbAccessError) {
           return NextResponse.json({ error: profileErr.message }, { status: 500 });
         }
-        // Schema cache out of sync; fall through to resilient server store
+        // Schema cache or permission error; fall through to resilient server store
       } else {
         // 2. Assign Staff Role
         await supabase.from('user_roles').insert({

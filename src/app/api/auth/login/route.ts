@@ -41,6 +41,8 @@ export async function POST(request: Request) {
         if (
           pErr &&
           (pErr.code === 'PGRST204' ||
+            pErr.code === '42501' ||
+            pErr.message?.includes('permission denied') ||
             pErr.message?.includes('schema cache') ||
             pErr.message?.includes("column of 'profiles'"))
         ) {
@@ -59,6 +61,8 @@ export async function POST(request: Request) {
         if (
           empErr &&
           (empErr.code === 'PGRST204' ||
+            empErr.code === '42501' ||
+            empErr.message?.includes('permission denied') ||
             empErr.message?.includes('schema cache') ||
             empErr.message?.includes("column of 'profiles'"))
         ) {
