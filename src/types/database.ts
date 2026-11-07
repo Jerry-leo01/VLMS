@@ -198,7 +198,7 @@ export interface FuelTransaction {
   source_reading?: number | null;
   canonical_reading_km?: number | null;
   odometer_evidence_id: string;
-  receipt_evidence_id: string;
+  receipt_evidence_id?: string | null;
   amount: number;
   currency: string;
   quantity_litres: number;

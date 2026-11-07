@@ -299,8 +299,8 @@ export default function FuelPurchasePage() {
         odometerEvidenceId = ev.id;
       }
 
-      // 2. Resolve Receipt Evidence ID (persisting receiptPhoto dataUrl)
-      let receiptEvidenceId = odometerEvidenceId;
+      // 2. Resolve Receipt Evidence ID (persisting receiptPhoto dataUrl for personal funds)
+      let receiptEvidenceId: string | null = null;
       if (paymentMethod === 'personal_fund' && receiptHash && receiptPhoto) {
         const recEv = await VLMSService.saveEvidenceFile({
           evidenceType: 'fuel_receipt',

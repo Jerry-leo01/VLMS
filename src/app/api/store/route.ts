@@ -84,6 +84,7 @@ export async function GET() {
         created_at: l.created_at ?? new Date().toISOString(),
       }));
 
+      const localStore = getServerStore();
       const cloudStore = {
         offices: offices && offices.length > 0 ? offices : DEFAULT_OFFICES,
         profiles: profiles || [],
@@ -91,12 +92,12 @@ export async function GET() {
         vehicles: vehicles || [],
         assignments: assignments || [],
         tomCards: tomCards || [],
-        evidenceFiles: [],
+        evidenceFiles: localStore?.evidenceFiles || [],
         dailyLogs: normalizedDailyLogs,
         fuelTransactions: normalizedFuelTxs,
         anomalyAlerts: anomalies || [],
         auditEvents: auditEvents || [],
-        resetTokens: [],
+        resetTokens: localStore?.resetTokens || [],
       };
 
       return NextResponse.json(
@@ -221,7 +222,11 @@ export async function POST(request: Request) {
       for (const item of incomingArr) {
         if (item && item[key]) {
           const prev = map.get(item[key]);
-          map.set(item[key], { ...(prev || {}), ...item });
+          const mergedItem = { ...(prev || {}), ...item };
+          if (!mergedItem.data_url && prev?.data_url) {
+            mergedItem.data_url = prev.data_url;
+          }
+          map.set(item[key], mergedItem);
         }
       }
       return Array.from(map.values());

@@ -55,7 +55,11 @@ export async function POST(request: Request) {
       );
 
       if (logErr) {
-        console.error('Supabase daily_logs error:', logErr);
+        console.error('Fatal Database Write Failure (daily_logs):', logErr);
+        return NextResponse.json(
+          { error: `Database persistence failed: ${logErr.message}`, code: logErr.code },
+          { status: 500, headers: { 'Cache-Control': 'no-store, max-age=0' } }
+        );
       }
 
       // 2. Insert into odometer_readings

@@ -21,6 +21,8 @@ export async function POST(request: Request) {
       odometerKm,
       sourceUnit = 'km',
       sourceReading,
+      odometerEvidenceId,
+      receiptEvidenceId,
       amount,
       quantityLitres,
       purchasedAt,
@@ -66,7 +68,11 @@ export async function POST(request: Request) {
       );
 
       if (txErr) {
-        console.error('Supabase fuel_transactions error:', txErr);
+        console.error('Fatal Database Write Failure (fuel_transactions):', txErr);
+        return NextResponse.json(
+          { error: `Database persistence failed: ${txErr.message}`, code: txErr.code },
+          { status: 500, headers: { 'Cache-Control': 'no-store, max-age=0' } }
+        );
       }
 
       // 2. Insert into odometer_readings
@@ -116,6 +122,8 @@ export async function POST(request: Request) {
         odometer_km: parsedOdometer,
         source_unit: sourceUnit === 'mi' ? 'mi' : 'km',
         source_reading: sourceReading !== undefined && sourceReading !== null ? Number(sourceReading) : parsedOdometer,
+        odometer_evidence_id: odometerEvidenceId || null,
+        receipt_evidence_id: receiptEvidenceId || null,
         amount: parsedAmount,
         currency: 'NGN',
         quantity_litres: parsedLitres,
@@ -153,6 +161,10 @@ export async function POST(request: Request) {
           sourceUnit: sourceUnit === 'mi' ? 'mi' : 'km',
           source_reading: sourceReading !== undefined && sourceReading !== null ? Number(sourceReading) : parsedOdometer,
           sourceReading: sourceReading !== undefined && sourceReading !== null ? Number(sourceReading) : parsedOdometer,
+          odometer_evidence_id: odometerEvidenceId || null,
+          odometerEvidenceId: odometerEvidenceId || null,
+          receipt_evidence_id: receiptEvidenceId || null,
+          receiptEvidenceId: receiptEvidenceId || null,
           amount: parsedAmount,
           currency: 'NGN',
           quantity_litres: parsedLitres,

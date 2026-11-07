@@ -206,13 +206,10 @@ function persistToLocalStorage(): void {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
     // Asynchronously dispatch to server API route for cross-device persistence
     if (isBrowserRuntime()) {
-      // Create a lightweight sanitized copy without giant base64 dataUrls
+      // Retain active evidence files with their dataUrls so images sync seamlessly across devices
       const sanitizedStore = {
         ...store,
-        evidenceFiles: store.evidenceFiles.map((e) => ({
-          ...e,
-          data_url: null, // Exclude heavy raw image base64 from server payload
-        })),
+        evidenceFiles: store.evidenceFiles.slice(-30),
       };
       fetch('/api/store', {
         method: 'POST',
@@ -993,13 +990,23 @@ export const VLMSService = {
             notes: input.comment,
           }),
         });
-        if (res.ok) {
-          const resJson = await res.json().catch(() => null);
-          if (resJson?.log?.id) {
-            newLog.id = resJson.log.id;
-          }
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => null);
+          const errorMsg = errJson?.error || `Server rejected daily log submission (HTTP ${res.status}).`;
+          console.error('Fatal Server Rejection on Daily Log submission:', errorMsg);
+          // Rollback local unpersisted entry to maintain data integrity
+          const idx = store.dailyLogs.findIndex((l) => l.id === newLogId);
+          if (idx >= 0) store.dailyLogs.splice(idx, 1);
+          throw new Error(errorMsg);
         }
-      } catch (err) {
+        const resJson = await res.json().catch(() => null);
+        if (resJson?.log?.id) {
+          newLog.id = resJson.log.id;
+        }
+      } catch (err: any) {
+        if (err?.message?.includes('Database persistence failed') || err?.message?.includes('Server rejected')) {
+          throw err;
+        }
         console.warn('Network sync warning: Daily log persisted locally, pending cloud sync:', err);
       }
     }
@@ -1065,7 +1072,7 @@ export const VLMSService = {
     sourceUnit?: 'km' | 'mi';
     sourceReading?: number | null;
     odometerEvidenceId: string;
-    receiptEvidenceId: string;
+    receiptEvidenceId?: string | null;
     amount: number;
     currency?: string;
     quantityLitres: number;
@@ -1130,7 +1137,7 @@ export const VLMSService = {
       source_reading: rawSourceReading,
       canonical_reading_km: canonicalFuelKm,
       odometer_evidence_id: input.odometerEvidenceId,
-      receipt_evidence_id: input.receiptEvidenceId,
+      receipt_evidence_id: input.receiptEvidenceId ?? null,
       amount: input.amount,
       currency: input.currency ?? 'NGN',
       quantity_litres: input.quantityLitres,
@@ -1157,6 +1164,10 @@ export const VLMSService = {
             tomCardId: input.tomCardId ?? null,
             vendorName: input.vendorName,
             odometerKm: canonicalFuelKm,
+            sourceUnit: sourceUnit,
+            sourceReading: rawSourceReading,
+            odometerEvidenceId: input.odometerEvidenceId,
+            receiptEvidenceId: input.receiptEvidenceId ?? null,
             amount: input.amount,
             currency: input.currency ?? 'NGN',
             quantityLitres: input.quantityLitres,
@@ -1164,13 +1175,23 @@ export const VLMSService = {
             idempotencyKey: input.idempotencyKey,
           }),
         });
-        if (res.ok) {
-          const resJson = await res.json().catch(() => null);
-          if (resJson?.transaction?.id) {
-            newTx.id = resJson.transaction.id;
-          }
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => null);
+          const errorMsg = errJson?.error || `Server rejected fuel transaction submission (HTTP ${res.status}).`;
+          console.error('Fatal Server Rejection on Fuel Transaction submission:', errorMsg);
+          // Rollback local unpersisted entry to maintain data integrity
+          const idx = store.fuelTransactions.findIndex((t) => t.id === newTxId);
+          if (idx >= 0) store.fuelTransactions.splice(idx, 1);
+          throw new Error(errorMsg);
         }
-      } catch (err) {
+        const resJson = await res.json().catch(() => null);
+        if (resJson?.transaction?.id) {
+          newTx.id = resJson.transaction.id;
+        }
+      } catch (err: any) {
+        if (err?.message?.includes('Database persistence failed') || err?.message?.includes('Server rejected')) {
+          throw err;
+        }
         console.warn('Network sync warning: Fuel transaction persisted locally, pending cloud sync:', err);
       }
     }
@@ -1303,41 +1324,73 @@ export const VLMSService = {
     for (const tx of store.fuelTransactions) {
       const vehicle = store.vehicles.find((v) => v.id === tx.vehicle_id);
       const user = store.profiles.find((p) => p.id === tx.user_id);
-      const recEv = store.evidenceFiles.find((e) => e.id === tx.receipt_evidence_id);
-      const odoEv = store.evidenceFiles.find((e) => e.id === tx.odometer_evidence_id);
+      const recEv = tx.receipt_evidence_id ? store.evidenceFiles.find((e) => e.id === tx.receipt_evidence_id) : null;
+      const odoEv = tx.odometer_evidence_id ? store.evidenceFiles.find((e) => e.id === tx.odometer_evidence_id) : null;
 
-      // Add Fuel Receipt / Transaction Evidence
-      gallery.push({
-        id: `gal-fuel-rec-${tx.id}`,
-        evidenceId: recEv?.id ?? tx.receipt_evidence_id,
-        evidenceType: tx.payment_method === 'personal_fund' ? 'fuel_receipt' : 'fuel_odometer',
-        title:
-          tx.payment_method === 'personal_fund'
-            ? `Fuel Receipt (${tx.vendor_name})`
-            : `TOM Card Fuel Record (${tx.vendor_name})`,
-        dataUrl: recEv?.data_url ?? odoEv?.data_url ?? null,
-        sha256Hash: recEv?.sha256_hash ?? odoEv?.sha256_hash ?? 'hash-verified',
-        vehiclePlate: vehicle?.plate_number ?? tx.vehicle_id,
-        vehicleId: tx.vehicle_id,
-        staffName: user?.full_name ?? 'Assigned Driver',
-        userId: tx.user_id,
-        odometerKm: tx.odometer_km,
-        amount: tx.amount,
-        quantityLitres: tx.quantity_litres,
-        vendorName: tx.vendor_name,
-        submittedAt: tx.submitted_at,
-        businessDate: tx.purchased_at.slice(0, 10),
-        sourceRecordId: tx.id,
-        sourceType: 'fuel_transaction',
-        status: tx.status,
-        metadata: {
-          ...(recEv?.metadata || {}),
-          vendor: tx.vendor_name,
+      // Add Fuel Receipt Evidence if personal fund
+      if (tx.payment_method === 'personal_fund') {
+        gallery.push({
+          id: `gal-fuel-rec-${tx.id}`,
+          evidenceId: recEv?.id ?? tx.receipt_evidence_id ?? `rec-${tx.id}`,
+          evidenceType: 'fuel_receipt',
+          title: `Fuel Receipt (${tx.vendor_name})`,
+          dataUrl: recEv?.data_url ?? null,
+          sha256Hash: recEv?.sha256_hash ?? 'hash-verified',
+          vehiclePlate: vehicle?.plate_number ?? tx.vehicle_id,
+          vehicleId: tx.vehicle_id,
+          staffName: user?.full_name ?? 'Assigned Driver',
+          userId: tx.user_id,
+          odometerKm: tx.odometer_km,
           amount: tx.amount,
           quantityLitres: tx.quantity_litres,
-          reading: tx.odometer_km,
-        },
-      });
+          vendorName: tx.vendor_name,
+          submittedAt: tx.submitted_at,
+          businessDate: tx.purchased_at.slice(0, 10),
+          sourceRecordId: tx.id,
+          sourceType: 'fuel_transaction',
+          status: tx.status,
+          metadata: {
+            ...(recEv?.metadata || {}),
+            vendor: tx.vendor_name,
+            amount: tx.amount,
+            quantityLitres: tx.quantity_litres,
+            reading: tx.odometer_km,
+          },
+        });
+      }
+
+      // Add Fuel Odometer Evidence if odometer evidence exists or tom_card
+      if (odoEv || tx.payment_method === 'tom_card') {
+        gallery.push({
+          id: `gal-fuel-odo-${tx.id}`,
+          evidenceId: odoEv?.id ?? tx.odometer_evidence_id ?? `odo-${tx.id}`,
+          evidenceType: 'fuel_odometer',
+          title:
+            tx.payment_method === 'tom_card'
+              ? `TOM Card Fuel Record (${tx.vendor_name})`
+              : `Fuel Odometer Reading (${tx.vendor_name})`,
+          dataUrl: odoEv?.data_url ?? null,
+          sha256Hash: odoEv?.sha256_hash ?? 'hash-verified',
+          vehiclePlate: vehicle?.plate_number ?? tx.vehicle_id,
+          vehicleId: tx.vehicle_id,
+          staffName: user?.full_name ?? 'Assigned Driver',
+          userId: tx.user_id,
+          odometerKm: tx.odometer_km,
+          amount: tx.amount,
+          quantityLitres: tx.quantity_litres,
+          vendorName: tx.vendor_name,
+          submittedAt: tx.submitted_at,
+          businessDate: tx.purchased_at.slice(0, 10),
+          sourceRecordId: tx.id,
+          sourceType: 'fuel_transaction',
+          status: tx.status,
+          metadata: {
+            ...(odoEv?.metadata || {}),
+            vendor: tx.vendor_name,
+            reading: tx.odometer_km,
+          },
+        });
+      }
     }
 
     return gallery.sort(
