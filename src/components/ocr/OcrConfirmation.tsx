@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { processOdometerImage, OcrResult } from '@/lib/ocr/processor';
 import { toCanonicalKm, formatOdometer, MILES_TO_KM } from '@/lib/utils';
 import { OdometerUnit } from '@/types/database';
+import { OdometerUnitToggle } from '@/components/ui/OdometerUnitToggle';
 import { Eye, CheckCircle2, Sparkles, Loader2, Gauge, RefreshCw } from 'lucide-react';
 
 interface OcrConfirmationProps {
@@ -156,34 +157,12 @@ export function OcrConfirmation({ imageSrc, roiImageSrc, onConfirmed }: OcrConfi
                 </div>
               </div>
 
-              {/* Unit Toggle */}
-              <div className="space-y-1">
-                <span className="text-xs font-semibold text-slate-700 block">Dashboard Measurement Unit</span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleUnitToggle('km')}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all border ${
-                      sourceUnit === 'km'
-                        ? 'bg-navy-900 text-white border-navy-900 shadow-sm'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    Kilometers (KM)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleUnitToggle('mi')}
-                    className={`py-2 px-3 rounded-lg text-xs font-bold transition-all border ${
-                      sourceUnit === 'mi'
-                        ? 'bg-navy-900 text-white border-navy-900 shadow-sm'
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                    }`}
-                  >
-                    Miles (MI)
-                  </button>
-                </div>
-              </div>
+              {/* Reusable Unit Toggle */}
+              <OdometerUnitToggle
+                unit={sourceUnit}
+                onChange={handleUnitToggle}
+                label="Dashboard Measurement Unit"
+              />
             </div>
           </div>
 

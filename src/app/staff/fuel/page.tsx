@@ -12,8 +12,10 @@ import {
   DailyLog,
   TomCard,
   FuelTransaction,
+  OdometerUnit,
 } from '@/types/database';
-import { formatCurrency, formatOdometer, getBusinessDate } from '@/lib/utils';
+import { formatCurrency, formatOdometer, getBusinessDate, toCanonicalKm, MILES_TO_KM } from '@/lib/utils';
+import { OdometerUnitToggle } from '@/components/ui/OdometerUnitToggle';
 import { processReceiptImage, ReceiptOcrResult } from '@/lib/ocr/processor';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -64,6 +66,7 @@ export default function FuelPurchasePage() {
   const [amount, setAmount] = useState('');
   const [litres, setLitres] = useState('');
   const [odometerChanged, setOdometerChanged] = useState<boolean>(false);
+  const [sourceUnit, setSourceUnit] = useState<OdometerUnit>('km');
   const [currentKm, setCurrentKm] = useState<string>('');
 
   // Evidence states
@@ -130,10 +133,17 @@ export default function FuelPurchasePage() {
           if (log && log.business_date === getBusinessDate()) {
             setTodayLog(log);
             setLatestKm(log.odometer_km);
-            setCurrentKm(log.odometer_km.toString());
+            const unit = log.source_unit ?? 'km';
+            setSourceUnit(unit);
+            const initialDisplay =
+              log.source_reading !== undefined && log.source_reading !== null
+                ? log.source_reading.toString()
+                : log.odometer_km.toString();
+            setCurrentKm(initialDisplay);
           } else {
             setTodayLog(null);
             setLatestKm(null);
+            setSourceUnit('km');
             setCurrentKm('');
           }
         }
@@ -209,7 +219,6 @@ export default function FuelPurchasePage() {
 
     const parsedAmount = parseFloat(amount);
     const parsedLitres = parseFloat(litres);
-    const parsedKm = parseFloat(currentKm);
 
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       setErrorMessage('Please enter a valid purchase amount.');
@@ -219,16 +228,39 @@ export default function FuelPurchasePage() {
       setErrorMessage('Please enter a valid fuel quantity in litres.');
       return;
     }
-    if (isNaN(parsedKm) || parsedKm < 0) {
-      setErrorMessage('Please enter a valid odometer reading.');
-      return;
-    }
 
-    if (parsedKm < todayLog.odometer_km) {
-      setErrorMessage(
-        `Fuel purchase odometer reading (${parsedKm} km) cannot be less than today's verified daily log reading (${todayLog.odometer_km} km).`
-      );
-      return;
+    let canonicalFuelKm: number;
+    let finalSourceUnit: OdometerUnit;
+    let finalSourceReading: number;
+
+    if (!odometerChanged) {
+      canonicalFuelKm = todayLog.odometer_km;
+      finalSourceUnit = todayLog.source_unit ?? 'km';
+      finalSourceReading = todayLog.source_reading ?? todayLog.odometer_km;
+    } else {
+      const parsedReading = parseFloat(currentKm);
+      if (isNaN(parsedReading) || parsedReading <= 0) {
+        setErrorMessage('Please enter a valid odometer reading.');
+        return;
+      }
+
+      canonicalFuelKm = toCanonicalKm(parsedReading, sourceUnit);
+      finalSourceUnit = sourceUnit;
+      finalSourceReading = parsedReading;
+
+      if (canonicalFuelKm < todayLog.odometer_km) {
+        const logUnit = (todayLog.source_unit ?? 'km').toUpperCase();
+        const logReading = todayLog.source_reading ?? todayLog.odometer_km;
+        setErrorMessage(
+          `Fuel purchase odometer reading (${parsedReading.toLocaleString()} ${sourceUnit.toUpperCase()} = ${canonicalFuelKm} KM) cannot be less than today's verified daily log reading (${logReading.toLocaleString()} ${logUnit} = ${todayLog.odometer_km} KM).`
+        );
+        return;
+      }
+
+      if (!newOdometerPhoto) {
+        setErrorMessage('Since the odometer has changed, a new dashboard photograph is required.');
+        return;
+      }
     }
 
     if (paymentMethod === 'personal_fund') {
@@ -242,11 +274,6 @@ export default function FuelPurchasePage() {
         setErrorMessage('Kindly review and confirm the receipt details before submitting.');
         return;
       }
-    }
-
-    if (odometerChanged && !newOdometerPhoto) {
-      setErrorMessage('Since the odometer has changed, a new dashboard photograph is required.');
-      return;
     }
 
     setIsSubmitting(true);
@@ -263,7 +290,11 @@ export default function FuelPurchasePage() {
           mimeType: 'image/jpeg',
           fileSizeBytes: newOdometerPhoto ? Math.round(newOdometerPhoto.length * 0.75) : 390000,
           dataUrl: newOdometerPhoto,
-          metadata: { reading: parsedKm },
+          metadata: {
+            reading: finalSourceReading,
+            unit: finalSourceUnit,
+            canonicalKm: canonicalFuelKm,
+          },
         });
         odometerEvidenceId = ev.id;
       }
@@ -305,7 +336,9 @@ export default function FuelPurchasePage() {
         tomCardId: paymentMethod === 'tom_card' ? tomCard?.id : null,
         vendorName:
           paymentMethod === 'tom_card' ? 'TOTAL ENERGIES FILLING STATION' : vendorName,
-        odometerKm: parsedKm,
+        odometerKm: canonicalFuelKm,
+        sourceUnit: finalSourceUnit,
+        sourceReading: finalSourceReading,
         odometerEvidenceId,
         receiptEvidenceId,
         amount: parsedAmount,
@@ -389,7 +422,9 @@ export default function FuelPurchasePage() {
               <div>
                 Odometer:{' '}
                 <span className="text-slate-800 font-semibold">
-                  {formatOdometer(completedTx.odometer_km)}
+                  {completedTx.source_reading
+                    ? `${completedTx.source_reading.toLocaleString()} ${(completedTx.source_unit ?? 'km').toUpperCase()} (${formatOdometer(completedTx.odometer_km)})`
+                    : formatOdometer(completedTx.odometer_km)}
                 </span>
               </div>
               <div>
@@ -594,13 +629,22 @@ export default function FuelPurchasePage() {
               <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                 <span className="text-xs font-bold text-slate-900">Odometer Verification</span>
                 <span className="text-xs text-slate-500">
-                  Latest: <strong className="font-mono">{formatOdometer(latestKm)}</strong>
+                  Latest:{' '}
+                  <strong className="font-mono">
+                    {todayLog?.source_reading !== undefined && todayLog?.source_reading !== null
+                      ? `${todayLog.source_reading.toLocaleString()} ${(todayLog.source_unit ?? 'km').toUpperCase()} (${formatOdometer(latestKm)})`
+                      : formatOdometer(latestKm)}
+                  </strong>
                 </span>
               </div>
 
               <div className="space-y-2">
                 <span className="text-xs text-slate-700 block">
-                  Has the odometer reading changed since your daily log ({latestKm ?? 0} KM)?
+                  Has the odometer reading changed since your daily log (
+                  {todayLog?.source_reading !== undefined && todayLog?.source_reading !== null
+                    ? `${todayLog.source_reading.toLocaleString()} ${(todayLog.source_unit ?? 'km').toUpperCase()}`
+                    : `${latestKm ?? 0} KM`}
+                  )?
                 </span>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -612,7 +656,10 @@ export default function FuelPurchasePage() {
                         : 'bg-slate-50 text-slate-700 border-slate-200'
                     }`}
                   >
-                    No, Still {latestKm ?? 0} KM
+                    No, Still{' '}
+                    {todayLog?.source_reading !== undefined && todayLog?.source_reading !== null
+                      ? `${todayLog.source_reading.toLocaleString()} ${(todayLog.source_unit ?? 'km').toUpperCase()}`
+                      : `${latestKm ?? 0} KM`}
                   </button>
                   <button
                     type="button"
@@ -637,26 +684,65 @@ export default function FuelPurchasePage() {
                 </div>
               ) : (
                 <div className="space-y-3 pt-2">
+                  {/* Reusable Unit Toggle: Rendered ONLY when user clicked 'Yes, Reading Changed' */}
+                  <OdometerUnitToggle
+                    unit={sourceUnit}
+                    onChange={(newUnit) => setSourceUnit(newUnit)}
+                    label="Odometer Measurement Unit"
+                  />
+
                   <div>
-                    <label
-                      htmlFor="newCurrentKm"
-                      className="block text-xs font-semibold text-slate-800"
-                    >
-                      New Current Odometer (KM) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      id="newCurrentKm"
-                      type="number"
-                      step="0.1"
-                      required
-                      value={currentKm}
-                      onChange={(e) => setCurrentKm(e.target.value)}
-                      className="mt-1 w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-semibold text-slate-900"
-                    />
+                    <div className="flex items-center justify-between">
+                      <label
+                        htmlFor="newCurrentKm"
+                        className="block text-xs font-semibold text-slate-800"
+                      >
+                        New Current Odometer ({sourceUnit.toUpperCase()}) <span className="text-red-500">*</span>
+                      </label>
+                      <span className="text-[11px] font-mono text-slate-500 font-semibold uppercase">
+                        Unit: {sourceUnit}
+                      </span>
+                    </div>
+                    <div className="relative mt-1">
+                      <input
+                        id="newCurrentKm"
+                        type="text"
+                        inputMode="decimal"
+                        required
+                        value={currentKm}
+                        onChange={(e) => {
+                          const clean = e.target.value.replace(/[^0-9.]/g, '');
+                          const parts = clean.split('.');
+                          const formatted = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : clean;
+                          setCurrentKm(formatted);
+                        }}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-mono font-semibold text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-800"
+                      />
+                      <span className="absolute right-3 top-2 text-xs font-bold text-slate-400 uppercase">
+                        {sourceUnit}
+                      </span>
+                    </div>
                     <p className="mt-1 text-[11px] text-slate-500">
-                      Enter the updated odometer reading shown on the vehicle dashboard.
+                      Enter the updated odometer reading shown on the vehicle dashboard in {sourceUnit.toUpperCase()}.
                     </p>
                   </div>
+
+                  {/* Live Canonical Conversion Display */}
+                  {parseFloat(currentKm) > 0 && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-emerald-800 font-semibold block">Canonical System Value</span>
+                        <span className="text-slate-600">
+                          {sourceUnit === 'mi'
+                            ? `${parseFloat(currentKm).toLocaleString()} Miles × ${MILES_TO_KM} = ${toCanonicalKm(parseFloat(currentKm), 'mi').toLocaleString()} KM`
+                            : `${parseFloat(currentKm).toLocaleString()} KM`}
+                        </span>
+                      </div>
+                      <span className="text-base font-bold font-mono text-emerald-900">
+                        {formatOdometer(toCanonicalKm(parseFloat(currentKm), sourceUnit), 'km')}
+                      </span>
+                    </div>
+                  )}
 
                   <CameraCapture
                     title="Photograph Current Odometer"

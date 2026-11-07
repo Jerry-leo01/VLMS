@@ -55,6 +55,8 @@ export async function GET() {
         tom_card_id: f.tom_card_id || null,
         vendor_name: f.vendor_name || 'Fuel Station',
         odometer_km: f.current_odometer_km ?? f.odometer_km ?? 0,
+        source_unit: f.source_unit || 'km',
+        source_reading: f.source_reading !== undefined && f.source_reading !== null ? Number(f.source_reading) : (f.current_odometer_km ?? f.odometer_km ?? 0),
         amount: Number(f.total_cost ?? f.amount ?? 0),
         currency: 'NGN',
         quantity_litres: Number(f.litres ?? f.quantity_litres ?? 0),
