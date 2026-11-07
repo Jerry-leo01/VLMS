@@ -18,6 +18,7 @@ export default function ManagementFuelPage() {
   useEffect(() => {
     async function loadData() {
       try {
+        await VLMSService.syncWithServer().catch(() => {});
         const data = await VLMSService.getAllFuelTransactions();
         setTransactions(data);
       } catch (err) {

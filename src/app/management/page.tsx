@@ -71,6 +71,7 @@ export default function ManagementDashboardPage() {
   useEffect(() => {
     async function loadData() {
       try {
+        await VLMSService.syncWithServer().catch(() => {});
         const [m, logs, alerts, gallery, fuel] = await Promise.all([
           VLMSService.getDashboardMetrics({
             startDate: dateRange.startDate,

@@ -18,6 +18,7 @@ export default function ManagementLogsPage() {
   useEffect(() => {
     async function loadData() {
       try {
+        await VLMSService.syncWithServer().catch(() => {});
         const data = await VLMSService.getAllDailyLogs();
         setLogs(data);
       } catch (err) {

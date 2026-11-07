@@ -57,7 +57,7 @@ export default function LoginPage() {
               vehicleId,
             });
 
-            VLMSService.syncWithServer().catch(() => {});
+            await VLMSService.syncWithServer().catch(() => {});
 
             if (
               role === 'administrator' ||
@@ -114,6 +114,7 @@ export default function LoginPage() {
             fullName: localProfile.full_name,
             email: localProfile.email,
           });
+          await VLMSService.syncWithServer().catch(() => {});
           if (
             role === 'administrator' ||
             role === 'fleet_manager' ||
@@ -148,6 +149,7 @@ export default function LoginPage() {
             fullName: profile?.full_name || data.user.email || 'Administrator',
             email: data.user.email,
           });
+          await VLMSService.syncWithServer().catch(() => {});
           if (
             role === 'administrator' ||
             role === 'fleet_manager' ||
@@ -198,6 +200,8 @@ export default function LoginPage() {
         plateNumber: vehicle.plate_number,
         fullName: asg.user?.full_name || 'Assigned Driver',
       });
+
+      await VLMSService.syncWithServer().catch(() => {});
 
       router.push('/staff');
     } catch (err: unknown) {

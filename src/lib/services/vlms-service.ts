@@ -260,9 +260,15 @@ export const VLMSService = {
   },
 
   async syncWithServer(): Promise<void> {
-    if (typeof window === 'undefined' || typeof fetch !== 'function') return;
+    if (!isBrowserRuntime()) return;
     try {
-      const res = await fetch('/api/store', { cache: 'no-store' });
+      const res = await fetch('/api/store', {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
       if (!res.ok) return;
       const json = await res.json();
       if (json?.data) {
@@ -971,21 +977,31 @@ export const VLMSService = {
 
     store.dailyLogs.push(newLog);
 
-    // Asynchronously dispatch directly to server staff endpoint for cloud Supabase persistence
-    if (typeof window !== 'undefined' && typeof fetch === 'function') {
-      fetch('/api/staff/daily-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: newLogId,
-          vehicleId: input.vehicleId,
-          userId: input.userId,
-          logDate: today,
-          closingOdometerKm: canonicalKm,
-          distanceTravelledKm: deltaKm,
-          notes: input.comment,
-        }),
-      }).catch(() => {});
+    // Guaranteed cloud dispatch to server staff endpoint for cloud Supabase persistence
+    if (isBrowserRuntime()) {
+      try {
+        const res = await fetch('/api/staff/daily-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: newLogId,
+            vehicleId: input.vehicleId,
+            userId: input.userId,
+            logDate: today,
+            closingOdometerKm: canonicalKm,
+            distanceTravelledKm: deltaKm,
+            notes: input.comment,
+          }),
+        });
+        if (res.ok) {
+          const resJson = await res.json().catch(() => null);
+          if (resJson?.log?.id) {
+            newLog.id = resJson.log.id;
+          }
+        }
+      } catch (err) {
+        console.warn('Network sync warning: Daily log persisted locally, pending cloud sync:', err);
+      }
     }
 
     // Standardized Administrative Alerts: DAILY_MILEAGE_DIFF is the exclusive daily log alert
@@ -1126,27 +1142,37 @@ export const VLMSService = {
 
     store.fuelTransactions.push(newTx);
 
-    // Asynchronously dispatch directly to server staff endpoint for cloud Supabase persistence
-    if (typeof window !== 'undefined' && typeof fetch === 'function') {
-      fetch('/api/staff/fuel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: newTxId,
-          vehicleId: input.vehicleId,
-          userId: input.userId,
-          dailyLogId: todayLog.id,
-          paymentMethod: input.paymentMethod,
-          tomCardId: input.tomCardId ?? null,
-          vendorName: input.vendorName,
-          odometerKm: canonicalFuelKm,
-          amount: input.amount,
-          currency: input.currency ?? 'NGN',
-          quantityLitres: input.quantityLitres,
-          purchasedAt: input.purchasedAt,
-          idempotencyKey: input.idempotencyKey,
-        }),
-      }).catch(() => {});
+    // Guaranteed cloud dispatch to server staff endpoint for cloud Supabase persistence
+    if (isBrowserRuntime()) {
+      try {
+        const res = await fetch('/api/staff/fuel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: newTxId,
+            vehicleId: input.vehicleId,
+            userId: input.userId,
+            dailyLogId: todayLog.id,
+            paymentMethod: input.paymentMethod,
+            tomCardId: input.tomCardId ?? null,
+            vendorName: input.vendorName,
+            odometerKm: canonicalFuelKm,
+            amount: input.amount,
+            currency: input.currency ?? 'NGN',
+            quantityLitres: input.quantityLitres,
+            purchasedAt: input.purchasedAt,
+            idempotencyKey: input.idempotencyKey,
+          }),
+        });
+        if (res.ok) {
+          const resJson = await res.json().catch(() => null);
+          if (resJson?.transaction?.id) {
+            newTx.id = resJson.transaction.id;
+          }
+        }
+      } catch (err) {
+        console.warn('Network sync warning: Fuel transaction persisted locally, pending cloud sync:', err);
+      }
     }
 
     // Standardized Administrative Alerts: FUEL_PURCHASE_VARIANCE is the exclusive fuel alert

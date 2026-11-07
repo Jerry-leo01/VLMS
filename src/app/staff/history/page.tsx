@@ -50,6 +50,7 @@ export default function StaffHistoryPage() {
   useEffect(() => {
     async function loadData() {
       try {
+        await VLMSService.syncWithServer().catch(() => {});
         const { profile: staff, assignment: asg } = await VLMSService.getCurrentStaffContext();
         const allLogs = await VLMSService.getAllDailyLogs();
         const allFuel = await VLMSService.getAllFuelTransactions();

@@ -29,6 +29,7 @@ export default function StaffDashboardPage() {
   useEffect(() => {
     async function loadData() {
       try {
+        await VLMSService.syncWithServer().catch(() => {});
         const { profile: staffProfile, assignment: asg } =
           await VLMSService.getCurrentStaffContext();
         if (staffProfile) setProfile(staffProfile);

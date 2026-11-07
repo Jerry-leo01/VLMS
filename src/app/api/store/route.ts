@@ -3,6 +3,9 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { DEFAULT_OFFICES } from '@/lib/services/baseline-store';
 import { getServerStore, saveServerStore, mergeWithBaseline } from '@/lib/services/server-store';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 function isValidUuid(id: string | null | undefined): boolean {
   if (!id) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
@@ -94,7 +97,10 @@ export async function GET() {
         resetTokens: [],
       };
 
-      return NextResponse.json({ data: mergeWithBaseline(cloudStore) });
+      return NextResponse.json(
+        { data: mergeWithBaseline(cloudStore) },
+        { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0' } }
+      );
     } catch (err) {
       console.error('Failed to query Supabase store:', err);
     }
