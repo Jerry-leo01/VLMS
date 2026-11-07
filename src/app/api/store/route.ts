@@ -3,6 +3,11 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { DEFAULT_OFFICES } from '@/lib/services/baseline-store';
 import { getServerStore, saveServerStore, mergeWithBaseline } from '@/lib/services/server-store';
 
+function isValidUuid(id: string | null | undefined): boolean {
+  if (!id) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+}
+
 export async function GET() {
   const supabase = getSupabaseAdmin();
 
@@ -37,6 +42,43 @@ export async function GET() {
         role: r.role,
       }));
 
+      // Normalize fuel transactions from Supabase into application model
+      const normalizedFuelTxs = (fuelTxs || []).map((f: any) => ({
+        id: f.id,
+        vehicle_id: f.vehicle_id,
+        user_id: f.user_id,
+        daily_log_id: f.daily_log_id || null,
+        payment_method: f.payment_method || (f.tom_card_id ? 'tom_card' : 'personal_fund'),
+        tom_card_id: f.tom_card_id || null,
+        vendor_name: f.vendor_name || 'Fuel Station',
+        odometer_km: f.current_odometer_km ?? f.odometer_km ?? 0,
+        amount: Number(f.total_cost ?? f.amount ?? 0),
+        currency: 'NGN',
+        quantity_litres: Number(f.litres ?? f.quantity_litres ?? 0),
+        purchased_at: f.transaction_date ?? f.purchased_at ?? f.created_at,
+        submitted_at: f.created_at ?? f.submitted_at ?? new Date().toISOString(),
+        status: (f.status === 'confirmed' ? 'verified' : f.status) || 'submitted',
+        idempotency_key: f.idempotency_key || f.id,
+      }));
+
+      // Normalize daily logs from Supabase into application model
+      const normalizedDailyLogs = (dailyLogs || []).map((l: any) => ({
+        id: l.id,
+        vehicle_id: l.vehicle_id,
+        user_id: l.user_id,
+        assignment_id: l.assignment_id || null,
+        business_date: l.log_date ?? l.business_date,
+        date: l.log_date ?? l.date,
+        odometer_km: l.closing_odometer_km ?? l.odometer_km ?? 0,
+        closing_odometer_km: l.closing_odometer_km ?? l.odometer_km ?? 0,
+        distance_travelled_km: l.distance_travelled_km ?? 0,
+        mileage_difference_km: l.distance_travelled_km ?? 0,
+        comment: l.notes ?? l.comment ?? null,
+        status: l.status || 'submitted',
+        submitted_at: l.created_at ?? l.submitted_at ?? new Date().toISOString(),
+        created_at: l.created_at ?? new Date().toISOString(),
+      }));
+
       const cloudStore = {
         offices: offices && offices.length > 0 ? offices : DEFAULT_OFFICES,
         profiles: profiles || [],
@@ -45,8 +87,8 @@ export async function GET() {
         assignments: assignments || [],
         tomCards: tomCards || [],
         evidenceFiles: [],
-        dailyLogs: dailyLogs || [],
-        fuelTransactions: fuelTxs || [],
+        dailyLogs: normalizedDailyLogs,
+        fuelTransactions: normalizedFuelTxs,
         anomalyAlerts: anomalies || [],
         auditEvents: auditEvents || [],
         resetTokens: [],
@@ -76,6 +118,77 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
+    const supabase = getSupabaseAdmin();
+
+    // If Supabase is available, sync incoming offline transactions directly to Supabase
+    if (supabase) {
+      if (Array.isArray(payload.fuelTransactions) && payload.fuelTransactions.length > 0) {
+        for (const f of payload.fuelTransactions) {
+          if (f.vehicle_id && f.user_id && isValidUuid(f.vehicle_id) && isValidUuid(f.user_id)) {
+            const txId = isValidUuid(f.id) ? f.id : crypto.randomUUID();
+            const txDate = f.purchased_at ? new Date(f.purchased_at).toISOString() : new Date().toISOString();
+            const litres = Number(f.quantity_litres ?? f.litres ?? 0);
+            const totalCost = Number(f.amount ?? f.total_cost ?? 0);
+            const costPerLitre = litres > 0 ? Math.round((totalCost / litres) * 100) / 100 : 0;
+            const odoKm = Number(f.odometer_km ?? f.current_odometer_km ?? 0);
+
+            try {
+              await supabase.from('fuel_transactions').upsert(
+                {
+                  id: txId,
+                  vehicle_id: f.vehicle_id,
+                  user_id: f.user_id,
+                  tom_card_id: isValidUuid(f.tom_card_id) ? f.tom_card_id : null,
+                  transaction_date: txDate,
+                  vendor_name: f.vendor_name || 'Fuel Station',
+                  litres,
+                  cost_per_litre: costPerLitre,
+                  total_cost: totalCost,
+                  current_odometer_km: odoKm,
+                  status: 'confirmed',
+                  created_at: txDate,
+                },
+                { onConflict: 'id' }
+              );
+            } catch {
+              // Non-blocking upsert
+            }
+          }
+        }
+      }
+
+      if (Array.isArray(payload.dailyLogs) && payload.dailyLogs.length > 0) {
+        for (const l of payload.dailyLogs) {
+          if (l.vehicle_id && l.user_id && isValidUuid(l.vehicle_id) && isValidUuid(l.user_id)) {
+            const logId = isValidUuid(l.id) ? l.id : crypto.randomUUID();
+            const logDate = l.business_date || l.date || new Date().toISOString().split('T')[0];
+            const odo = Number(l.closing_odometer_km ?? l.odometer_km ?? 0);
+            const dist = Number(l.distance_travelled_km ?? l.mileage_difference_km ?? 0);
+
+            try {
+              await supabase.from('daily_logs').upsert(
+                {
+                  id: logId,
+                  vehicle_id: l.vehicle_id,
+                  user_id: l.user_id,
+                  assignment_id: isValidUuid(l.assignment_id) ? l.assignment_id : null,
+                  log_date: logDate,
+                  closing_odometer_km: odo,
+                  distance_travelled_km: dist,
+                  notes: l.comment || l.notes || null,
+                  status: 'submitted',
+                  updated_at: new Date().toISOString(),
+                },
+                { onConflict: 'vehicle_id, log_date' }
+              );
+            } catch {
+              // Non-blocking upsert
+            }
+          }
+        }
+      }
+    }
+
     const current = getServerStore() || {
       offices: DEFAULT_OFFICES,
       profiles: [],
@@ -83,7 +196,6 @@ export async function POST(request: Request) {
       vehicles: [],
       assignments: [],
       tomCards: [],
-      registrationRequests: [],
       evidenceFiles: [],
       dailyLogs: [],
       fuelTransactions: [],
@@ -114,7 +226,6 @@ export async function POST(request: Request) {
       vehicles: mergeCollection(current.vehicles, payload.vehicles),
       assignments: mergeCollection(current.assignments, payload.assignments),
       tomCards: mergeCollection(current.tomCards, payload.tomCards),
-      registrationRequests: mergeCollection(current.registrationRequests, payload.registrationRequests),
       evidenceFiles: mergeCollection(current.evidenceFiles, payload.evidenceFiles),
       dailyLogs: mergeCollection(current.dailyLogs, payload.dailyLogs),
       fuelTransactions: mergeCollection(current.fuelTransactions, payload.fuelTransactions),

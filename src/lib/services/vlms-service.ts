@@ -206,10 +206,18 @@ function persistToLocalStorage(): void {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
     // Asynchronously dispatch to server API route for cross-device persistence
     if (isBrowserRuntime()) {
+      // Create a lightweight sanitized copy without giant base64 dataUrls
+      const sanitizedStore = {
+        ...store,
+        evidenceFiles: store.evidenceFiles.map((e) => ({
+          ...e,
+          data_url: null, // Exclude heavy raw image base64 from server payload
+        })),
+      };
       fetch('/api/store', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(store),
+        body: JSON.stringify(sanitizedStore),
       }).catch(() => {});
     }
   } catch {
@@ -935,7 +943,7 @@ export const VLMSService = {
       longitude: input.longitude,
     });
 
-    const newLogId = `log-${Date.now()}`;
+    const newLogId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `log-${Date.now()}`;
     const newLog: DailyLog = {
       id: newLogId,
       vehicle_id: input.vehicleId,
@@ -962,6 +970,23 @@ export const VLMSService = {
     };
 
     store.dailyLogs.push(newLog);
+
+    // Asynchronously dispatch directly to server staff endpoint for cloud Supabase persistence
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      fetch('/api/staff/daily-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newLogId,
+          vehicleId: input.vehicleId,
+          userId: input.userId,
+          logDate: today,
+          closingOdometerKm: canonicalKm,
+          distanceTravelledKm: deltaKm,
+          notes: input.comment,
+        }),
+      }).catch(() => {});
+    }
 
     // Standardized Administrative Alerts: DAILY_MILEAGE_DIFF is the exclusive daily log alert
     const generatedAlerts: AnomalyAlert[] = [];
@@ -1075,7 +1100,7 @@ export const VLMSService = {
     const plateNumber = vehicle?.plate_number || 'Unknown Vehicle';
     const varianceNotification = formatFuelVarianceNotification(userFullName, plateNumber, deltaKm);
 
-    const newTxId = `fuel-${Date.now()}`;
+    const newTxId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `fuel-${Date.now()}`;
     const newTx: FuelTransaction = {
       id: newTxId,
       vehicle_id: input.vehicleId,
@@ -1100,6 +1125,29 @@ export const VLMSService = {
     };
 
     store.fuelTransactions.push(newTx);
+
+    // Asynchronously dispatch directly to server staff endpoint for cloud Supabase persistence
+    if (typeof window !== 'undefined' && typeof fetch === 'function') {
+      fetch('/api/staff/fuel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newTxId,
+          vehicleId: input.vehicleId,
+          userId: input.userId,
+          dailyLogId: todayLog.id,
+          paymentMethod: input.paymentMethod,
+          tomCardId: input.tomCardId ?? null,
+          vendorName: input.vendorName,
+          odometerKm: canonicalFuelKm,
+          amount: input.amount,
+          currency: input.currency ?? 'NGN',
+          quantityLitres: input.quantityLitres,
+          purchasedAt: input.purchasedAt,
+          idempotencyKey: input.idempotencyKey,
+        }),
+      }).catch(() => {});
+    }
 
     // Standardized Administrative Alerts: FUEL_PURCHASE_VARIANCE is the exclusive fuel alert
     const generatedAlerts: AnomalyAlert[] = [];
