@@ -1,8 +1,12 @@
 -- ==============================================================================
 -- VLMS: MASTER CLEAN DATABASE SCHEMA & INITIALIZATION SCRIPT
--- Version: 2.5.0 (Consolidated Master Baseline)
--- Description: Completely resets public schema and initializes all tables, columns,
--- constraints, RLS policies, table grants, official offices, and seed admin.
+-- Version: 3.0.0 (Custom Tailored Setup)
+-- Description:
+-- 1. Drops and recreates public schema cleanly.
+-- 2. Initializes all 14 tables with complete modern columns and RLS policies.
+-- 3. Seeds 8 official branch offices.
+-- 4. Seeds ONLY 1 Administrator profile: nwaminijeremiah@gmail.com (Password: Jerry12).
+-- 5. Zero vehicles seeded (vehicles table remains 0 rows).
 -- ==============================================================================
 
 -- 1. CLEAN RESET: Drop and recreate public schema
@@ -54,7 +58,7 @@ CREATE TABLE public.user_roles (
     PRIMARY KEY (user_id, role)
 );
 
--- 2.4 Vehicles
+-- 2.4 Vehicles (Starts completely empty: 0 rows)
 CREATE TABLE public.vehicles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     plate_number TEXT NOT NULL UNIQUE,
@@ -211,12 +215,9 @@ CREATE TABLE public.system_settings (
 );
 
 -- 3. PERMISSIONS & ROW LEVEL SECURITY (RLS)
-
--- Table Grants
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
 
--- Enable RLS on core tables
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vehicles ENABLE ROW LEVEL SECURITY;
@@ -231,7 +232,6 @@ ALTER TABLE public.audit_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.offices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
 
--- Transparent Public / Authenticated Policies for Portal Operation
 CREATE POLICY "Allow select on offices" ON public.offices FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "Allow select on profiles" ON public.profiles FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "Allow insert on profiles" ON public.profiles FOR INSERT TO anon, authenticated WITH CHECK (true);
@@ -260,7 +260,7 @@ CREATE POLICY "Allow all on alerts" ON public.anomaly_alerts FOR ALL TO anon, au
 CREATE POLICY "Allow all on audit" ON public.audit_events FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on settings" ON public.system_settings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- 4. SEED DATA: OFFICIAL OFFICES & BASELINE SEED ADMIN
+-- 4. SEED DATA: OFFICIAL OFFICES & SPECIFIC ADMINISTRATOR PROFILE
 INSERT INTO public.offices (id, name, address, is_active)
 VALUES
     ('11111111-1111-1111-1111-111111111111', 'Head Office', 'Corporate Headquarters, Victoria Island, Lagos State, Nigeria', true),
@@ -273,8 +273,8 @@ VALUES
     ('88888888-8888-8888-8888-888888888888', 'North East Branch', 'Maiduguri Office, Borno State, Nigeria', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Seed Default Administrator
--- Credentials: admin@vlms.ng / Admin@12345
+-- Seed Single Administrator Profile
+-- Credentials: nwaminijeremiah@gmail.com / Jerry12
 INSERT INTO public.profiles (
     id,
     full_name,
@@ -288,18 +288,19 @@ INSERT INTO public.profiles (
     updated_at
 ) VALUES (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-    'System Administrator',
-    'admin@vlms.ng',
+    'Jeremiah Nwamini',
+    'nwaminijeremiah@gmail.com',
     'ADM-001',
     '+2348000000000',
     '11111111-1111-1111-1111-111111111111',
     'active',
-    -- Default password hash for: Admin@12345
-    '$2b$10$wT8vIeR2jFzDqmNz9dK9hefR4c6L5b9X8y0a1B2c3D4e5F6g7H8i.',
+    -- Cryptographic hash for password: Jerry12
+    'vlmsadmin26:9281fabe6f529a0b68e92d5ca77e1cabaf82f529ca3d09ed8309d7d36695050b',
     NOW(),
     NOW()
 ) ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
+    full_name = EXCLUDED.full_name,
     status = 'active',
     password_hash = EXCLUDED.password_hash;
 
@@ -307,15 +308,7 @@ INSERT INTO public.user_roles (user_id, role)
 VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'administrator')
 ON CONFLICT (user_id, role) DO NOTHING;
 
--- Seed Standard Fleet Vehicles
-INSERT INTO public.vehicles (id, plate_number, make, model, car_name, year, current_odometer_km, status)
-VALUES
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01', 'KJA-842XA', 'Toyota', 'Hilux 4x4 Double Cabin', 'Toyota Hilux 4x4', 2022, 42150, 'active'),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb02', 'ABJ-194LK', 'Toyota', 'Corolla 1.8L', 'Toyota Corolla', 2021, 28400, 'active'),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb03', 'PHC-552XY', 'Ford', 'Ranger XLT', 'Ford Ranger XLT', 2023, 15300, 'active'),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb04', 'EKY-772TN', 'Toyota', 'HiAce Commuter Bus', 'Toyota HiAce Bus', 2020, 89500, 'active'),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb05', 'APP-902BG', 'Nissan', 'Navara PRO-4X', 'Nissan Navara PRO-4X', 2022, 36200, 'maintenance')
-ON CONFLICT (id) DO NOTHING;
+-- NOTE: Vehicles table is left completely empty (0 rows) as requested.
 
 -- 5. Force PostgREST schema cache reload
 NOTIFY pgrst, 'reload schema';
