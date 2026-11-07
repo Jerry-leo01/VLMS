@@ -644,12 +644,6 @@ export default function RegisterPage() {
                         <ShieldCheck className="w-4 h-4 text-emerald-400" />
                         <span>Verify & Unlock Setup Form</span>
                       </button>
-
-                      <div className="pt-1 text-center">
-                        <p className="text-[10px] text-slate-400 dark:text-slate-500">
-                          Emergency Disaster Recovery Authorization PIN: <code className="font-mono font-bold text-slate-600 dark:text-slate-300">999000</code>
-                        </p>
-                      </div>
                     </div>
 
                     <div className="text-center">
