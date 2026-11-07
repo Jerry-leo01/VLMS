@@ -28,28 +28,48 @@ export async function POST(request: Request) {
       let matchedRole = 'administrator';
       let assignedVehicle: any = null;
 
+      let hasSchemaCacheError = false;
+
       if (isEmail) {
         const normalizedEmail = trimmed.toLowerCase();
-        const { data: p } = await supabase
+        const { data: p, error: pErr } = await supabase
           .from('profiles')
           .select('id, full_name, email, employee_id, password_hash, status')
           .ilike('email', normalizedEmail)
           .maybeSingle();
-        profile = p;
+
+        if (
+          pErr &&
+          (pErr.code === 'PGRST204' ||
+            pErr.message?.includes('schema cache') ||
+            pErr.message?.includes("column of 'profiles'"))
+        ) {
+          hasSchemaCacheError = true;
+        } else {
+          profile = p;
+        }
       } else {
         // Try finding profile by employee_id first
-        const { data: pByEmp } = await supabase
+        const { data: pByEmp, error: empErr } = await supabase
           .from('profiles')
           .select('id, full_name, email, employee_id, password_hash, status')
           .ilike('employee_id', trimmed)
           .maybeSingle();
-        if (pByEmp) {
+
+        if (
+          empErr &&
+          (empErr.code === 'PGRST204' ||
+            empErr.message?.includes('schema cache') ||
+            empErr.message?.includes("column of 'profiles'"))
+        ) {
+          hasSchemaCacheError = true;
+        } else if (pByEmp) {
           profile = pByEmp;
         }
       }
 
       // If not found by email or employee_id, check vehicles by plate number
-      if (!profile) {
+      if (!profile && !hasSchemaCacheError) {
         const normalizedPlate = normalizePlateNumber(trimmed);
         const { data: v } = await supabase
           .from('vehicles')
@@ -84,61 +104,64 @@ export async function POST(request: Request) {
       }
 
       if (!profile) {
-        return NextResponse.json(
-          { error: 'Account not found. Please verify your email or complete registration.' },
-          { status: 401, headers: { 'Cache-Control': 'no-store, max-age=0' } }
-        );
-      }
+        if (!hasSchemaCacheError) {
+          return NextResponse.json(
+            { error: 'Account not found. Please verify your email or complete registration.' },
+            { status: 401, headers: { 'Cache-Control': 'no-store, max-age=0' } }
+          );
+        }
+        // If hasSchemaCacheError is true, fall through to server store fallback
+      } else {
+        const isValid = await verifyPassword(password, profile.password_hash);
+        if (!isValid) {
+          return NextResponse.json(
+            { error: 'Invalid password. Please check your credentials or reset your password.' },
+            { status: 401, headers: { 'Cache-Control': 'no-store, max-age=0' } }
+          );
+        }
 
-      const isValid = await verifyPassword(password, profile.password_hash);
-      if (!isValid) {
-        return NextResponse.json(
-          { error: 'Invalid password. Please check your credentials or reset your password.' },
-          { status: 401, headers: { 'Cache-Control': 'no-store, max-age=0' } }
-        );
-      }
-
-      const { data: roleRow } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', profile.id)
-        .maybeSingle();
-
-      matchedRole = roleRow?.role || 'administrator';
-
-      if (matchedRole === 'staff' && !assignedVehicle) {
-        const { data: asg } = await supabase
-          .from('vehicle_assignments')
-          .select('vehicle_id')
+        const { data: roleRow } = await supabase
+          .from('user_roles')
+          .select('role')
           .eq('user_id', profile.id)
-          .is('ends_at', null)
           .maybeSingle();
 
-        if (asg?.vehicle_id) {
-          const { data: veh } = await supabase
-            .from('vehicles')
-            .select('id, plate_number')
-            .eq('id', asg.vehicle_id)
-            .maybeSingle();
-          assignedVehicle = veh;
-        }
-      }
+        matchedRole = roleRow?.role || 'administrator';
 
-      return NextResponse.json(
-        {
-          success: true,
-          user: {
-            userId: profile.id,
-            role: matchedRole,
-            fullName: profile.full_name,
-            email: profile.email,
-            employeeId: profile.employee_id,
-            plateNumber: assignedVehicle?.plate_number || undefined,
-            vehicleId: assignedVehicle?.id || undefined,
+        if (matchedRole === 'staff' && !assignedVehicle) {
+          const { data: asg } = await supabase
+            .from('vehicle_assignments')
+            .select('vehicle_id')
+            .eq('user_id', profile.id)
+            .is('ends_at', null)
+            .maybeSingle();
+
+          if (asg?.vehicle_id) {
+            const { data: veh } = await supabase
+              .from('vehicles')
+              .select('id, plate_number')
+              .eq('id', asg.vehicle_id)
+              .maybeSingle();
+            assignedVehicle = veh;
+          }
+        }
+
+        return NextResponse.json(
+          {
+            success: true,
+            user: {
+              userId: profile.id,
+              role: matchedRole,
+              fullName: profile.full_name,
+              email: profile.email,
+              employeeId: profile.employee_id,
+              plateNumber: assignedVehicle?.plate_number || undefined,
+              vehicleId: assignedVehicle?.id || undefined,
+            },
           },
-        },
-        { headers: { 'Cache-Control': 'no-store, max-age=0' } }
-      );
+          { headers: { 'Cache-Control': 'no-store, max-age=0' } }
+        );
+      }
     }
 
     // ==========================================

@@ -73,13 +73,18 @@ export async function POST(request: Request) {
 
       // Existence Check: Email
       if (cleanEmail) {
-        const { data: existingEmail } = await supabase
+        const { data: existingEmail, error: emailCheckErr } = await supabase
           .from('profiles')
           .select('id, email')
           .ilike('email', cleanEmail)
           .maybeSingle();
 
-        if (existingEmail) {
+        const isSchemaCacheError =
+          emailCheckErr?.code === 'PGRST204' ||
+          emailCheckErr?.message?.includes('schema cache') ||
+          emailCheckErr?.message?.includes("column of 'profiles'");
+
+        if (existingEmail && !isSchemaCacheError) {
           return NextResponse.json(
             { error: 'Email is already registered to another user account. Kindly sign in.' },
             { status: 409 }
@@ -109,110 +114,118 @@ export async function POST(request: Request) {
         .single();
 
       if (profileErr) {
-        return NextResponse.json({ error: profileErr.message }, { status: 500 });
-      }
+        const isInsertSchemaError =
+          profileErr.code === 'PGRST204' ||
+          profileErr.message?.includes('schema cache') ||
+          profileErr.message?.includes("column of 'profiles'");
 
-      // 2. Assign Staff Role
-      await supabase.from('user_roles').insert({
-        user_id: userId,
-        role: 'staff',
-        created_at: now,
-      });
-
-      // 3. Create Vehicle
-      const vehicleId = crypto.randomUUID();
-      const vehicleMake = carName?.trim() || 'Company Vehicle';
-      const vehicleModel = carModel?.trim() || 'Standard Fleet';
-
-      const { data: vehicle, error: vehicleErr } = await supabase
-        .from('vehicles')
-        .insert({
-          id: vehicleId,
-          plate_number: normalizedPlate,
-          make: vehicleMake,
-          model: vehicleModel,
-          car_name: carName?.trim() || `${vehicleMake} ${vehicleModel}`,
-          year: parseInt(carYear, 10) || new Date().getFullYear(),
-          status: 'active',
-          created_at: now,
-          updated_at: now,
-        })
-        .select()
-        .single();
-
-      if (vehicleErr) {
-        return NextResponse.json({ error: vehicleErr.message }, { status: 500 });
-      }
-
-      // 4. Create Active Assignment
-      const { data: assignment } = await supabase
-        .from('vehicle_assignments')
-        .insert({
-          id: crypto.randomUUID(),
+        if (!isInsertSchemaError) {
+          return NextResponse.json({ error: profileErr.message }, { status: 500 });
+        }
+        // Schema cache out of sync; fall through to resilient server store
+      } else {
+        // 2. Assign Staff Role
+        await supabase.from('user_roles').insert({
           user_id: userId,
-          vehicle_id: vehicleId,
-          starts_at: now,
-          ends_at: null,
-          assigned_by: null,
+          role: 'staff',
           created_at: now,
-        })
-        .select()
-        .single();
+        });
 
-      // 5. Create TOM Card (if provided)
-      let tomCard = null;
-      if (tomCardNumber && tomCardNumber.trim()) {
-        const { data: tc } = await supabase
-          .from('tom_cards')
+        // 3. Create Vehicle
+        const vehicleId = crypto.randomUUID();
+        const vehicleMake = carName?.trim() || 'Company Vehicle';
+        const vehicleModel = carModel?.trim() || 'Standard Fleet';
+
+        const { data: vehicle, error: vehicleErr } = await supabase
+          .from('vehicles')
           .insert({
-            id: crypto.randomUUID(),
-            card_reference: tomCardNumber.trim(),
-            masked_card_number: tomCardNumber.trim(),
-            vehicle_id: vehicleId,
-            user_id: userId,
+            id: vehicleId,
+            plate_number: normalizedPlate,
+            make: vehicleMake,
+            model: vehicleModel,
+            car_name: carName?.trim() || `${vehicleMake} ${vehicleModel}`,
+            year: parseInt(carYear, 10) || new Date().getFullYear(),
             status: 'active',
             created_at: now,
             updated_at: now,
           })
           .select()
           .single();
-        tomCard = tc;
-      }
 
-      // 6. Record Registration Request
-      const { data: reqRecord } = await supabase
-        .from('registration_requests')
-        .insert({
-          id: crypto.randomUUID(),
-          user_id: userId,
-          requested_plate_number: normalizedPlate,
-          requested_phone_number: phoneNumber?.trim() || null,
-          requested_car_name: carName?.trim() || null,
-          requested_car_model: carModel?.trim() || null,
-          requested_car_year: parseInt(carYear, 10) || null,
-          requested_tom_card: tomCardNumber?.trim() || null,
-          requested_office_id: officeId || DEFAULT_OFFICE_ID,
-          requested_role: 'staff',
-          status: 'approved',
-          reviewed_at: now,
-          created_at: now,
-        })
-        .select()
-        .single();
+        if (vehicleErr) {
+          return NextResponse.json({ error: vehicleErr.message }, { status: 500 });
+        }
 
-      return NextResponse.json(
-        {
-          success: true,
-          data: {
-            profile,
-            vehicle,
-            assignment,
-            tomCard,
-            registrationRequest: reqRecord,
+        // 4. Create Active Assignment
+        const { data: assignment } = await supabase
+          .from('vehicle_assignments')
+          .insert({
+            id: crypto.randomUUID(),
+            user_id: userId,
+            vehicle_id: vehicleId,
+            starts_at: now,
+            ends_at: null,
+            assigned_by: null,
+            created_at: now,
+          })
+          .select()
+          .single();
+
+        // 5. Create TOM Card (if provided)
+        let tomCard = null;
+        if (tomCardNumber && tomCardNumber.trim()) {
+          const { data: tc } = await supabase
+            .from('tom_cards')
+            .insert({
+              id: crypto.randomUUID(),
+              card_reference: tomCardNumber.trim(),
+              masked_card_number: tomCardNumber.trim(),
+              vehicle_id: vehicleId,
+              user_id: userId,
+              status: 'active',
+              created_at: now,
+              updated_at: now,
+            })
+            .select()
+            .single();
+          tomCard = tc;
+        }
+
+        // 6. Record Registration Request
+        const { data: reqRecord } = await supabase
+          .from('registration_requests')
+          .insert({
+            id: crypto.randomUUID(),
+            user_id: userId,
+            requested_plate_number: normalizedPlate,
+            requested_phone_number: phoneNumber?.trim() || null,
+            requested_car_name: carName?.trim() || null,
+            requested_car_model: carModel?.trim() || null,
+            requested_car_year: parseInt(carYear, 10) || null,
+            requested_tom_card: tomCardNumber?.trim() || null,
+            requested_office_id: officeId || DEFAULT_OFFICE_ID,
+            requested_role: 'staff',
+            status: 'approved',
+            reviewed_at: now,
+            created_at: now,
+          })
+          .select()
+          .single();
+
+        return NextResponse.json(
+          {
+            success: true,
+            data: {
+              profile,
+              vehicle,
+              assignment,
+              tomCard,
+              registrationRequest: reqRecord,
+            },
           },
-        },
-        { status: 201 }
-      );
+          { status: 201 }
+        );
+      }
     }
 
     // ==========================================

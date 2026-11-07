@@ -29,13 +29,18 @@ export async function POST(request: Request) {
     // ==========================================
     if (supabase) {
       // Existence Check: Email
-      const { data: existingEmail } = await supabase
+      const { data: existingEmail, error: emailCheckErr } = await supabase
         .from('profiles')
         .select('id, email')
         .ilike('email', normalizedEmail)
         .maybeSingle();
 
-      if (existingEmail) {
+      const isSchemaCacheError =
+        emailCheckErr?.code === 'PGRST204' ||
+        emailCheckErr?.message?.includes('schema cache') ||
+        emailCheckErr?.message?.includes("column of 'profiles'");
+
+      if (existingEmail && !isSchemaCacheError) {
         return NextResponse.json(
           { error: 'Email is already registered to another user account.' },
           { status: 409 }
@@ -43,7 +48,7 @@ export async function POST(request: Request) {
       }
 
       // Existence Check: Staff / Employee ID
-      if (cleanEmpId) {
+      if (cleanEmpId && !isSchemaCacheError) {
         const { data: existingEmp } = await supabase
           .from('profiles')
           .select('id, employee_id')
@@ -61,43 +66,53 @@ export async function POST(request: Request) {
       const passwordHash = password ? await hashPassword(password) : null;
       const userId = crypto.randomUUID();
 
-      const { data: profile, error: profileErr } = await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          full_name: fullName.trim(),
-          email: normalizedEmail,
-          phone_number: phoneNumber?.trim() || null,
-          employee_id: cleanEmpId || `ADM-${Date.now().toString().slice(-4)}`,
-          office_id: officeId || DEFAULT_OFFICE_ID,
-          status: 'active',
-          password_hash: passwordHash,
-          created_at: now,
-          updated_at: now,
-        })
-        .select()
-        .single();
+      if (!isSchemaCacheError) {
+        const { data: profile, error: profileErr } = await supabase
+          .from('profiles')
+          .insert({
+            id: userId,
+            full_name: fullName.trim(),
+            email: normalizedEmail,
+            phone_number: phoneNumber?.trim() || null,
+            employee_id: cleanEmpId || `ADM-${Date.now().toString().slice(-4)}`,
+            office_id: officeId || DEFAULT_OFFICE_ID,
+            status: 'active',
+            password_hash: passwordHash,
+            created_at: now,
+            updated_at: now,
+          })
+          .select()
+          .single();
 
-      if (profileErr) {
-        return NextResponse.json({ error: profileErr.message }, { status: 500 });
-      }
+        if (profileErr) {
+          const isInsertSchemaError =
+            profileErr.code === 'PGRST204' ||
+            profileErr.message?.includes('schema cache') ||
+            profileErr.message?.includes("column of 'profiles'");
 
-      await supabase.from('user_roles').insert({
-        user_id: userId,
-        role: assignedRole,
-        created_at: now,
-      });
-
-      return NextResponse.json(
-        {
-          success: true,
-          data: {
-            profile,
+          if (!isInsertSchemaError) {
+            return NextResponse.json({ error: profileErr.message }, { status: 500 });
+          }
+          // Schema cache out of sync; fall through to resilient server store
+        } else {
+          await supabase.from('user_roles').insert({
+            user_id: userId,
             role: assignedRole,
-          },
-        },
-        { status: 201 }
-      );
+            created_at: now,
+          });
+
+          return NextResponse.json(
+            {
+              success: true,
+              data: {
+                profile,
+                role: assignedRole,
+              },
+            },
+            { status: 201 }
+          );
+        }
+      }
     }
 
     // ==========================================
