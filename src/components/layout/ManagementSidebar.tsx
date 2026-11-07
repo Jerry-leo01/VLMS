@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
-  CheckCircle2,
   Car,
   CreditCard,
   FileSpreadsheet,
@@ -77,10 +76,9 @@ export function ManagementSidebar() {
   // Enhanced Information Architecture & Logical Grouping
   const menuSections = [
     {
-      title: 'Overview & Queues',
+      title: 'Overview & Alerts',
       items: [
         { href: '/management', label: 'Master Dashboard', icon: LayoutDashboard },
-        { href: '/management/approvals', label: 'Registration Queue', icon: CheckCircle2 },
         { href: '/management/anomalies', label: 'Anomaly Review', icon: AlertTriangle },
       ],
     },

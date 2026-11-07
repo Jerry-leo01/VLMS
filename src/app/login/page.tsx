@@ -173,15 +173,8 @@ export default function LoginPage() {
       }
 
       if (!vehicle) {
-        const pending = await VLMSService.getPendingRegistrationByPlate(normalizedPlate);
-        if (pending) {
-          setError(
-            'Your vehicle registration is currently pending administrator verification. Once approved in the Admin Portal, you can sign in.'
-          );
-          return;
-        }
         throw new Error(
-          'Vehicle plate number not registered. Please submit a company car registration request first.'
+          'Vehicle plate number not registered. Please complete registration first.'
         );
       }
 

@@ -195,27 +195,6 @@ export async function POST(request: Request) {
           tomCard = tc;
         }
 
-        // 6. Record Registration Request
-        const { data: reqRecord } = await supabase
-          .from('registration_requests')
-          .insert({
-            id: crypto.randomUUID(),
-            user_id: userId,
-            requested_plate_number: normalizedPlate,
-            requested_phone_number: phoneNumber?.trim() || null,
-            requested_car_name: carName?.trim() || null,
-            requested_car_model: carModel?.trim() || null,
-            requested_car_year: parseInt(carYear, 10) || null,
-            requested_tom_card: tomCardNumber?.trim() || null,
-            requested_office_id: officeId || DEFAULT_OFFICE_ID,
-            requested_role: 'staff',
-            status: 'approved',
-            reviewed_at: now,
-            created_at: now,
-          })
-          .select()
-          .single();
-
         return NextResponse.json(
           {
             success: true,
@@ -224,7 +203,6 @@ export async function POST(request: Request) {
               vehicle,
               assignment,
               tomCard,
-              registrationRequest: reqRecord,
             },
           },
           { status: 201 }
@@ -321,28 +299,10 @@ export async function POST(request: Request) {
       created_at: now,
     };
 
-    const reqRecord = {
-      id: `reg-${Date.now()}`,
-      user_id: userId,
-      requested_plate_number: normalizedPlate,
-      requested_phone_number: phoneNumber?.trim() || null,
-      requested_car_name: carName?.trim() || null,
-      requested_car_model: carModel?.trim() || null,
-      requested_car_year: parseInt(carYear, 10) || null,
-      requested_tom_card: tomCardNumber?.trim() || null,
-      requested_office_id: officeId || DEFAULT_OFFICE_ID,
-      requested_role: 'staff',
-      status: 'approved',
-      reviewer_id: 'SYSTEM_AUTO',
-      reviewed_at: now,
-      created_at: now,
-    };
-
     local.profiles.push(profile);
     local.userRoles.push({ userId, role: 'staff' });
     local.vehicles.push(vehicle);
     local.assignments.push(assignment);
-    local.registrationRequests.push(reqRecord);
 
     if (tomCardNumber && tomCardNumber.trim()) {
       local.tomCards.push({
@@ -366,7 +326,6 @@ export async function POST(request: Request) {
           profile,
           vehicle,
           assignment,
-          registrationRequest: reqRecord,
         },
       },
       { status: 201 }

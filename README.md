@@ -59,7 +59,7 @@ VLMS is an enterprise-grade, mobile-first fleet operations and vehicle log manag
 ### Installation
 ```bash
 # Clone the repository
-git clone https://github.com/JerryLeo-24/VLMS.git
+git clone [https://github.com/JerryLeo-24/VLMS.git](https://github.com/Jerry-leo01/VLMS)
 cd VLMS
 
 # Install dependencies

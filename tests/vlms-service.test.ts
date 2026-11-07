@@ -79,7 +79,6 @@ describe('VLMS Service & Business Logic', () => {
     });
 
     expect(req.status).toBe('approved');
-    expect(req.requested_car_name).toBe('Toyota Corolla Executive');
 
     const profile = await VLMSService.getStaffProfile(req.user_id);
     expect(profile?.status).toBe('active');

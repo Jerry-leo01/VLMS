@@ -8,7 +8,6 @@ import {
   AnomalyAlert,
   AuditEvent,
   EvidenceFile,
-  RegistrationRequest,
   Office,
   UserRole,
   UserStatus,
@@ -89,7 +88,6 @@ interface DataStore {
   vehicles: Vehicle[];
   assignments: VehicleAssignment[];
   tomCards: TomCard[];
-  registrationRequests: RegistrationRequest[];
   evidenceFiles: EvidenceFile[];
   dailyLogs: DailyLog[];
   fuelTransactions: FuelTransaction[];
@@ -136,11 +134,6 @@ function mergeStoreFromData(parsed: Partial<DataStore>): void {
     const map = new Map(store.tomCards.map((t) => [t.id, t]));
     for (const t of parsed.tomCards) map.set(t.id, t);
     store.tomCards = Array.from(map.values());
-  }
-  if (Array.isArray(parsed.registrationRequests)) {
-    const map = new Map(store.registrationRequests.map((r) => [r.id, r]));
-    for (const r of parsed.registrationRequests) map.set(r.id, r);
-    store.registrationRequests = Array.from(map.values());
   }
   if (Array.isArray(parsed.evidenceFiles)) {
     const map = new Map(store.evidenceFiles.map((e) => [e.id, e]));
@@ -431,14 +424,6 @@ export const VLMSService = {
     const vehicle = store.vehicles.find((v) => v.id === asg.vehicle_id);
     const user = store.profiles.find((p) => p.id === asg.user_id);
     return { ...asg, vehicle, user };
-  },
-
-  async getPendingRegistrationByPlate(plateNumber: string): Promise<RegistrationRequest | undefined> {
-    syncFromLocalStorage();
-    const normalized = normalizePlateNumber(plateNumber);
-    return store.registrationRequests.find(
-      (r) => r.status === 'pending' && normalizePlateNumber(r.requested_plate_number) === normalized
-    );
   },
 
   async getUserRole(userId: string): Promise<UserRole | undefined> {
@@ -1308,7 +1293,7 @@ export const VLMSService = {
     password?: string;
     requestedRole?: UserRole;
     adminPasscode?: string;
-  }): Promise<RegistrationRequest> {
+  }): Promise<any> {
     syncFromLocalStorage();
     const normalizedPlate = normalizePlateNumber(input.plateNumber);
     const now = new Date().toISOString();
@@ -1317,10 +1302,7 @@ export const VLMSService = {
     const existingVehicle = store.vehicles.find(
       (v) => normalizePlateNumber(v.plate_number) === normalizedPlate
     );
-    const existingPending = store.registrationRequests.find(
-      (r) => r.status === 'pending' && normalizePlateNumber(r.requested_plate_number) === normalizedPlate
-    );
-    if (existingVehicle || existingPending) {
+    if (existingVehicle) {
       throw new Error('Plate number already exists in the database. Kindly sign in.');
     }
 
@@ -1383,15 +1365,22 @@ export const VLMSService = {
 
         const json = await res.json();
         if (json?.data) {
-          const { profile, vehicle, assignment, tomCard, registrationRequest } = json.data;
+          const { profile, vehicle, assignment, tomCard } = json.data;
           if (profile) store.profiles.push(profile);
           if (vehicle) store.vehicles.push(vehicle);
           if (assignment) store.assignments.push(assignment);
           if (tomCard) store.tomCards.push(tomCard);
-          if (registrationRequest) store.registrationRequests.push(registrationRequest);
           store.userRoles.push({ userId: profile.id, role: 'staff' });
           persistToLocalStorage();
-          return registrationRequest;
+          return {
+            profile,
+            vehicle,
+            assignment,
+            tomCard,
+            status: 'approved',
+            id: profile.id,
+            user_id: profile.id,
+          };
         }
       } catch (err: unknown) {
         const errorObj = err as Error;
@@ -1462,34 +1451,13 @@ export const VLMSService = {
       });
     }
 
-    // 7. Auto-approve registration request record
-    const reqId = `reg-${Date.now()}`;
-    const req: RegistrationRequest = {
-      id: reqId,
-      user_id: userId,
-      requested_plate_number: normalizedPlate,
-      requested_phone_number: input.phoneNumber ?? null,
-      requested_car_name: input.carName ?? null,
-      requested_car_model: input.carModel ?? null,
-      requested_car_year: input.carYear ?? null,
-      requested_tom_card: input.tomCardNumber?.trim() || null,
-      requested_office_id: input.officeId || DEFAULT_OFFICES[0].id,
-      requested_role: assignedRole,
-      status: 'approved',
-      reviewer_id: 'SYSTEM_AUTO',
-      reviewed_at: now,
-      rejection_reason: null,
-      created_at: now,
-    };
-    store.registrationRequests.push(req);
-
-    // Audit Events
+    // Audit Event
     store.auditEvents.push({
-      id: `audit-${Date.now()}-1`,
+      id: `audit-${Date.now()}`,
       actor_id: userId,
-      action: 'REGISTRATION_SUBMITTED',
-      entity_type: 'REGISTRATION_REQUEST',
-      entity_id: reqId,
+      action: 'USER_REGISTERED',
+      entity_type: 'USER',
+      entity_id: userId,
       before_data: null,
       after_data: {
         fullName: input.fullName,
@@ -1503,133 +1471,15 @@ export const VLMSService = {
       created_at: now,
     });
 
-    store.auditEvents.push({
-      id: `audit-${Date.now()}-2`,
-      actor_id: 'SYSTEM_AUTO',
-      action: 'REGISTRATION_AUTO_APPROVED',
-      entity_type: 'REGISTRATION_REQUEST',
-      entity_id: reqId,
-      before_data: { status: 'pending' },
-      after_data: { status: 'approved', vehicle_id: vehicleId, plate_number: normalizedPlate },
-      created_at: now,
-    });
-
     persistToLocalStorage();
-    return req;
-  },
-
-  async approveRegistration(requestId: string, adminId: string): Promise<RegistrationRequest> {
-    syncFromLocalStorage();
-    const req = store.registrationRequests.find((r) => r.id === requestId);
-    if (!req) throw new Error('Registration request not found');
-
-    req.status = 'approved';
-    req.reviewer_id = adminId;
-    req.reviewed_at = new Date().toISOString();
-
-    const profile = store.profiles.find((p) => p.id === req.user_id);
-    if (profile) {
-      profile.status = 'active';
-      profile.updated_at = new Date().toISOString();
-    }
-
-    // Assign vehicle if exists or create new vehicle record
-    let vehicle = store.vehicles.find(
-      (v) => normalizePlateNumber(v.plate_number) === normalizePlateNumber(req.requested_plate_number)
-    );
-    if (!vehicle) {
-      vehicle = {
-        id: `v-${Date.now()}`,
-        plate_number: req.requested_plate_number,
-        make: req.requested_car_name || 'Company Vehicle',
-        model: req.requested_car_model || 'Standard Fleet',
-        car_name: req.requested_car_name || 'Company Vehicle',
-        year: req.requested_car_year || new Date().getFullYear(),
-        status: 'active',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      store.vehicles.push(vehicle);
-    }
-
-    store.assignments.push({
-      id: `asg-${Date.now()}`,
-      user_id: req.user_id,
-      vehicle_id: vehicle.id,
-      starts_at: new Date().toISOString(),
-      ends_at: null,
-      assigned_by: adminId,
-      created_at: new Date().toISOString(),
-    });
-
-    // Provision TOM Card if requested during registration
-    if (req.requested_tom_card) {
-      const existingCard = store.tomCards.find(
-        (tc) => tc.card_reference === req.requested_tom_card
-      );
-      if (!existingCard) {
-        store.tomCards.push({
-          id: `tc-${Date.now()}`,
-          card_reference: req.requested_tom_card,
-          masked_card_number: req.requested_tom_card,
-          vehicle_id: vehicle.id,
-          user_id: req.user_id,
-          status: 'active',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-      }
-    }
-
-    // Audit event
-    store.auditEvents.push({
-      id: `audit-${Date.now()}`,
-      actor_id: adminId,
-      action: 'REGISTRATION_APPROVED',
-      entity_type: 'REGISTRATION_REQUEST',
-      entity_id: requestId,
-      before_data: { status: 'pending' },
-      after_data: { status: 'approved', vehicle_id: vehicle.id, plate_number: vehicle.plate_number },
-      created_at: new Date().toISOString(),
-    });
-
-    persistToLocalStorage();
-    return req;
-  },
-
-  async rejectRegistration(
-    requestId: string,
-    adminId: string,
-    reason: string
-  ): Promise<RegistrationRequest> {
-    syncFromLocalStorage();
-    const req = store.registrationRequests.find((r) => r.id === requestId);
-    if (!req) throw new Error('Registration request not found');
-
-    req.status = 'rejected';
-    req.reviewer_id = adminId;
-    req.reviewed_at = new Date().toISOString();
-    req.rejection_reason = reason;
-
-    const profile = store.profiles.find((p) => p.id === req.user_id);
-    if (profile) {
-      profile.status = 'rejected';
-    }
-
-    // Audit event
-    store.auditEvents.push({
-      id: `audit-${Date.now()}`,
-      actor_id: adminId,
-      action: 'REGISTRATION_REJECTED',
-      entity_type: 'REGISTRATION_REQUEST',
-      entity_id: requestId,
-      before_data: { status: 'pending' },
-      after_data: { status: 'rejected', reason },
-      created_at: new Date().toISOString(),
-    });
-
-    persistToLocalStorage();
-    return req;
+    return {
+      profile: newProfile,
+      vehicle,
+      assignment: store.assignments.find((a) => a.user_id === userId),
+      status: 'approved',
+      id: newProfile.id,
+      user_id: newProfile.id,
+    };
   },
 
   // Management Master Dashboard Metrics
@@ -1716,7 +1566,7 @@ export const VLMSService = {
       ...fuelInRange.map((f) => f.user_id),
     ]).size;
 
-    const pendingApprovals = store.registrationRequests.filter((r) => r.status === 'pending').length;
+    const pendingApprovals = 0;
 
     return {
       totalUsers,
@@ -1821,18 +1671,6 @@ export const VLMSService = {
       .map((ev) => {
         const actor = store.profiles.find((p) => p.id === ev.actor_id);
         return { ...ev, actor };
-      });
-  },
-
-  async getRegistrationRequests(): Promise<RegistrationRequest[]> {
-    syncFromLocalStorage();
-    return store.registrationRequests
-      .slice()
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .map((req) => {
-        const user = store.profiles.find((p) => p.id === req.user_id);
-        const requested_office = store.offices.find((o) => o.id === req.requested_office_id);
-        return { ...req, user, requested_office };
       });
   },
 

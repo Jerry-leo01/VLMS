@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, CheckCircle2, Car, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, Users, Car, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function ManagementBottomNav() {
@@ -12,7 +12,7 @@ export function ManagementBottomNav() {
   // Exactly four primary navigation items for Admin / Management mobile view
   const primaryNavItems = [
     { href: '/management', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/management/approvals', label: 'Approvals', icon: CheckCircle2 },
+    { href: '/management/users', label: 'Fleet Staff', icon: Users },
     { href: '/management/vehicles', label: 'Vehicles', icon: Car },
     { href: '/management/anomalies', label: 'Anomalies', icon: AlertTriangle },
   ];

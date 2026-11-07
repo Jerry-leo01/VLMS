@@ -171,7 +171,7 @@ export default function VehiclesManagementPage() {
               <div className="space-y-1">
                 <h3 className="text-sm font-bold text-slate-900">No Vehicles Registered Yet</h3>
                 <p className="text-xs text-slate-500 max-w-md mx-auto">
-                  Vehicles approved from the Staff Registration Queue or added via the &ldquo;Register Vehicle&rdquo; button above appear here as interactive cards.
+                  Vehicles registered by staff or added via the &ldquo;Register Vehicle&rdquo; button above appear here as interactive cards.
                 </p>
               </div>
             </div>

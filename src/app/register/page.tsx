@@ -565,7 +565,7 @@ export default function RegisterPage() {
                       disabled={loading}
                       className="w-full py-3.5 px-4 bg-navy-900 hover:bg-navy-800 dark:bg-blue-600 dark:hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-md transition-colors"
                     >
-                      {loading ? 'Submitting Registration...' : 'Submit Car Registration Request'}
+                      {loading ? 'Submitting Registration...' : 'Register Staff & Vehicle'}
                     </button>
                   </form>
                 </>

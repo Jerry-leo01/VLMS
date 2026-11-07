@@ -61,7 +61,6 @@ export function mergeWithBaseline(current: any) {
     vehicles: mergeById(current?.vehicles, baseline.vehicles),
     assignments: mergeById(current?.assignments, baseline.assignments),
     tomCards: mergeById(current?.tomCards, baseline.tomCards),
-    registrationRequests: mergeById(current?.registrationRequests, baseline.registrationRequests),
     evidenceFiles: current?.evidenceFiles || [],
     dailyLogs: current?.dailyLogs || [],
     fuelTransactions: current?.fuelTransactions || [],

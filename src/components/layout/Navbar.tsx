@@ -77,11 +77,11 @@ export function Navbar({ userRole = 'staff', userName, vehiclePlate }: NavbarPro
               <Link href="/management" className="text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-navy-900 dark:hover:text-white transition-colors">
                 Fleet Overview
               </Link>
-              <Link href="/management/approvals" className="text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-navy-900 dark:hover:text-white transition-colors">
-                Approvals
-              </Link>
               <Link href="/management/vehicles" className="text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-navy-900 dark:hover:text-white transition-colors">
                 Vehicles
+              </Link>
+              <Link href="/management/users" className="text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-navy-900 dark:hover:text-white transition-colors">
+                Fleet Staff
               </Link>
               <Link href="/management/anomalies" className="text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-navy-900 dark:hover:text-white transition-colors">
                 Anomalies
@@ -201,18 +201,18 @@ export function Navbar({ userRole = 'staff', userName, vehiclePlate }: NavbarPro
                 Dashboard
               </Link>
               <Link
-                href="/management/approvals"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                Registration Approvals
-              </Link>
-              <Link
                 href="/management/vehicles"
                 onClick={() => setMobileMenuOpen(false)}
                 className="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 Vehicles Directory
+              </Link>
+              <Link
+                href="/management/users"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Fleet Staff
               </Link>
               <Link
                 href="/management/anomalies"

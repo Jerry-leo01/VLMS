@@ -311,8 +311,9 @@ export function formatAuditActionText(
       return `Recorded fuel purchase of ${d.quantity_litres || 0} L (${formatCurrency(
         Number(d.amount || 0)
       )}) via ${String(d.payment_method || '').replace(/_/g, ' ')}.`;
+    case 'USER_REGISTERED':
     case 'REGISTRATION_SUBMITTED':
-      return `Registration request submitted by ${d.fullName || 'User'} for car ${
+      return `Staff registration completed by ${d.fullName || 'User'} for car ${
         d.carName ? `${d.carName} ` : ''
       }(Plate: ${d.plateNumber || 'N/A'}, Role: ${d.role || 'Staff'}).`;
     case 'REGISTRATION_APPROVED':

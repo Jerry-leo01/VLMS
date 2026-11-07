@@ -5,15 +5,14 @@ describe('User Profile Self-Service Management & Security', () => {
   let testUserId: string;
 
   beforeEach(async () => {
-    // Register and approve a test driver
-    const req = await VLMSService.submitRegistration({
+    // Register test driver (direct auto-authorization)
+    const reg = await VLMSService.submitRegistration({
       fullName: 'Adebayo Ogunlesi',
       phoneNumber: '+2348011223344',
       plateNumber: `TEST-${Date.now().toString().slice(-5)}`,
       officeId: '11111111-1111-1111-1111-111111111111',
     });
-    await VLMSService.approveRegistration(req.id, 'p-admin-01');
-    testUserId = req.user_id;
+    testUserId = reg.user_id;
 
     // Set active session for the user
     VLMSService.setActiveSession({

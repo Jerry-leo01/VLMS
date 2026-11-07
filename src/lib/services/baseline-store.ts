@@ -5,7 +5,6 @@ import {
   Vehicle,
   VehicleAssignment,
   TomCard,
-  RegistrationRequest,
 } from '../../types/database';
 
 export const DEFAULT_OFFICES: Office[] = [
@@ -159,8 +158,6 @@ export const BASELINE_TOM_CARDS: TomCard[] = [
   },
 ];
 
-export const BASELINE_REGISTRATION_REQUESTS: RegistrationRequest[] = [];
-
 export function getBaselineStore() {
   return {
     offices: [...DEFAULT_OFFICES],
@@ -169,7 +166,6 @@ export function getBaselineStore() {
     vehicles: [...BASELINE_VEHICLES],
     assignments: [...BASELINE_ASSIGNMENTS],
     tomCards: [...BASELINE_TOM_CARDS],
-    registrationRequests: [...BASELINE_REGISTRATION_REQUESTS],
     evidenceFiles: [],
     dailyLogs: [],
     fuelTransactions: [],
