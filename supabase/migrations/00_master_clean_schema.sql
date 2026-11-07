@@ -96,26 +96,7 @@ CREATE TABLE public.tom_cards (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
 );
 
--- 2.7 Registration Requests
-CREATE TABLE public.registration_requests (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    requested_plate_number TEXT NOT NULL,
-    requested_phone_number TEXT,
-    requested_car_name TEXT,
-    requested_car_model TEXT,
-    requested_car_year INTEGER,
-    requested_tom_card TEXT,
-    requested_office_id UUID REFERENCES public.offices(id) ON DELETE SET NULL,
-    requested_role TEXT DEFAULT 'staff',
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
-    reviewer_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
-    reviewed_at TIMESTAMPTZ,
-    rejection_reason TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
-);
-
--- 2.8 Evidence Files
+-- 2.7 Evidence Files
 CREATE TABLE public.evidence_files (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     storage_bucket TEXT NOT NULL DEFAULT 'vlms-evidence',
@@ -233,7 +214,7 @@ ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vehicles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.vehicle_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tom_cards ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.registration_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.evidence_files ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.daily_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fuel_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.odometer_readings ENABLE ROW LEVEL SECURITY;
@@ -260,9 +241,7 @@ CREATE POLICY "Allow insert on assignments" ON public.vehicle_assignments FOR IN
 CREATE POLICY "Allow select on tom_cards" ON public.tom_cards FOR SELECT TO anon, authenticated USING (true);
 CREATE POLICY "Allow insert on tom_cards" ON public.tom_cards FOR INSERT TO anon, authenticated WITH CHECK (true);
 
-CREATE POLICY "Allow select on registration_requests" ON public.registration_requests FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY "Allow insert on registration_requests" ON public.registration_requests FOR INSERT TO anon, authenticated WITH CHECK (true);
-
+CREATE POLICY "Allow all on evidence" ON public.evidence_files FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on logs" ON public.daily_logs FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on fuel" ON public.fuel_transactions FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on odometer" ON public.odometer_readings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
