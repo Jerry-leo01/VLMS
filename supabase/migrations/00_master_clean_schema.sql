@@ -13,7 +13,7 @@
 DROP SCHEMA IF EXISTS public CASCADE;
 CREATE SCHEMA public;
 
-GRANT ALL ON SCHEMA public TO postgres;
+GRANT ALL ON SCHEMA public TO postgres, service_role;
 GRANT ALL ON SCHEMA public TO public;
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
 
@@ -215,8 +215,18 @@ CREATE TABLE public.system_settings (
 );
 
 -- 3. PERMISSIONS & ROW LEVEL SECURITY (RLS)
+GRANT ALL ON SCHEMA public TO postgres, service_role;
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+
+GRANT ALL ON ALL TABLES IN SCHEMA public TO postgres, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO postgres, service_role;
+
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO postgres, service_role, anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres, service_role, anon, authenticated;
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
