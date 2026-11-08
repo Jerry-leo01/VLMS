@@ -39,14 +39,16 @@ export async function POST(request: Request) {
     const txId = isValidUuid(id) ? id : crypto.randomUUID();
     const parsedAmount = Number(amount) || 0;
     const parsedLitres = Number(quantityLitres) || 0;
-    const parsedOdometer = Number(odometerKm) || 0;
+    const rawOdometerNum = Number(odometerKm);
+    const parsedOdometer = isNaN(rawOdometerNum) ? 0 : rawOdometerNum;
+    const roundedOdometer = Math.round(parsedOdometer);
     const costPerLitre = parsedLitres > 0 ? Math.round((parsedAmount / parsedLitres) * 100) / 100 : 0;
     const txDate = purchasedAt ? new Date(purchasedAt).toISOString() : new Date().toISOString();
 
     const supabase = getSupabaseAdmin();
 
     if (supabase) {
-      // 1. Insert into fuel_transactions in Supabase
+      // 1. Insert into fuel_transactions in Supabase (sanitize integer columns)
       const { error: txErr } = await supabase.from('fuel_transactions').upsert(
         {
           id: txId,
@@ -58,7 +60,7 @@ export async function POST(request: Request) {
           litres: parsedLitres,
           cost_per_litre: costPerLitre,
           total_cost: parsedAmount,
-          current_odometer_km: parsedOdometer,
+          current_odometer_km: roundedOdometer,
           source_unit: sourceUnit === 'mi' ? 'mi' : 'km',
           source_reading: sourceReading !== undefined && sourceReading !== null ? Number(sourceReading) : parsedOdometer,
           status: 'confirmed',
@@ -76,13 +78,13 @@ export async function POST(request: Request) {
       }
 
       // 2. Insert into odometer_readings
-      if (parsedOdometer > 0) {
+      if (roundedOdometer > 0) {
         try {
           await supabase.from('odometer_readings').insert({
             id: crypto.randomUUID(),
             vehicle_id: vehicleId,
             user_id: userId,
-            reading_km: parsedOdometer,
+            reading_km: roundedOdometer,
             reading_type: 'fuel_purchase',
             reading_timestamp: txDate,
             source: 'driver_entry',
@@ -99,10 +101,10 @@ export async function POST(request: Request) {
           .eq('id', vehicleId)
           .maybeSingle();
 
-        if (v && (v.current_odometer_km === null || parsedOdometer > v.current_odometer_km)) {
+        if (v && (v.current_odometer_km === null || roundedOdometer > v.current_odometer_km)) {
           await supabase
             .from('vehicles')
-            .update({ current_odometer_km: parsedOdometer, updated_at: new Date().toISOString() })
+            .update({ current_odometer_km: roundedOdometer, updated_at: new Date().toISOString() })
             .eq('id', vehicleId);
         }
       }

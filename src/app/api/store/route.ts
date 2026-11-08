@@ -57,6 +57,8 @@ export async function GET() {
         odometer_km: f.current_odometer_km ?? f.odometer_km ?? 0,
         source_unit: f.source_unit || 'km',
         source_reading: f.source_reading !== undefined && f.source_reading !== null ? Number(f.source_reading) : (f.current_odometer_km ?? f.odometer_km ?? 0),
+        odometer_evidence_id: f.odometer_evidence_id || null,
+        receipt_evidence_id: f.receipt_evidence_id || null,
         amount: Number(f.total_cost ?? f.amount ?? 0),
         currency: 'NGN',
         quantity_litres: Number(f.litres ?? f.quantity_litres ?? 0),
@@ -78,6 +80,9 @@ export async function GET() {
         closing_odometer_km: l.closing_odometer_km ?? l.odometer_km ?? 0,
         distance_travelled_km: l.distance_travelled_km ?? 0,
         mileage_difference_km: l.distance_travelled_km ?? 0,
+        source_unit: l.source_unit || 'km',
+        source_reading: l.source_reading !== undefined && l.source_reading !== null ? Number(l.source_reading) : (l.closing_odometer_km ?? l.odometer_km ?? 0),
+        evidence_id: l.closing_evidence_file_id ?? l.evidence_id ?? null,
         comment: l.notes ?? l.comment ?? null,
         status: l.status || 'submitted',
         submitted_at: l.created_at ?? l.submitted_at ?? new Date().toISOString(),
@@ -85,6 +90,35 @@ export async function GET() {
       }));
 
       const localStore = getServerStore();
+
+      // Enrich Supabase logs with local store attributes (e.g. evidence_id) to ensure seamless cross-device synchronization
+      const localLogMap = new Map((localStore?.dailyLogs || []).map((l: any) => [l.id, l]));
+      const localLogByDate = new Map((localStore?.dailyLogs || []).map((l: any) => [`${l.vehicle_id}_${l.business_date || l.date}`, l]));
+      const enrichedDailyLogs = normalizedDailyLogs.map((cloudLog: any) => {
+        const localMatch: any = localLogMap.get(cloudLog.id) || localLogByDate.get(`${cloudLog.vehicle_id}_${cloudLog.business_date || cloudLog.date}`);
+        return {
+          ...(localMatch || {}),
+          ...cloudLog,
+          evidence_id: cloudLog.evidence_id || localMatch?.evidence_id || null,
+          source_unit: cloudLog.source_unit || localMatch?.source_unit || 'km',
+          source_reading: cloudLog.source_reading ?? localMatch?.source_reading ?? cloudLog.odometer_km,
+        };
+      });
+
+      // Enrich Supabase fuel transactions with local store evidence pointers
+      const localFuelMap = new Map((localStore?.fuelTransactions || []).map((f: any) => [f.id, f]));
+      const enrichedFuelTxs = normalizedFuelTxs.map((cloudTx: any) => {
+        const localMatch: any = localFuelMap.get(cloudTx.id);
+        return {
+          ...(localMatch || {}),
+          ...cloudTx,
+          odometer_evidence_id: cloudTx.odometer_evidence_id || localMatch?.odometer_evidence_id || null,
+          receipt_evidence_id: cloudTx.receipt_evidence_id || localMatch?.receipt_evidence_id || null,
+          source_unit: cloudTx.source_unit || localMatch?.source_unit || 'km',
+          source_reading: cloudTx.source_reading ?? localMatch?.source_reading ?? cloudTx.odometer_km,
+        };
+      });
+
       const cloudStore = {
         offices: offices && offices.length > 0 ? offices : DEFAULT_OFFICES,
         profiles: profiles || [],
@@ -93,8 +127,8 @@ export async function GET() {
         assignments: assignments || [],
         tomCards: tomCards || [],
         evidenceFiles: localStore?.evidenceFiles || [],
-        dailyLogs: normalizedDailyLogs,
-        fuelTransactions: normalizedFuelTxs,
+        dailyLogs: enrichedDailyLogs,
+        fuelTransactions: enrichedFuelTxs,
         anomalyAlerts: anomalies || [],
         auditEvents: auditEvents || [],
         resetTokens: localStore?.resetTokens || [],
@@ -232,6 +266,32 @@ export async function POST(request: Request) {
       return Array.from(map.values());
     };
 
+    // Merge daily logs by unique id and vehicle_id + date to prevent duplicate daily log entries across devices
+    const mergeDailyLogs = (existingArr: any[] = [], incomingArr: any[] = []) => {
+      const map = new Map();
+      for (const item of existingArr) {
+        if (item && item.id) {
+          map.set(item.id, item);
+          const dateKey = `${item.vehicle_id}_${item.business_date || item.date || item.log_date}`;
+          map.set(dateKey, item);
+        }
+      }
+      for (const item of incomingArr) {
+        if (item && item.id) {
+          const dateKey = `${item.vehicle_id}_${item.business_date || item.date || item.log_date}`;
+          const prev = map.get(dateKey) || map.get(item.id);
+          const mergedItem = { ...(prev || {}), ...item };
+          map.set(item.id, mergedItem);
+          map.set(dateKey, mergedItem);
+        }
+      }
+      const unique = new Map();
+      for (const item of map.values()) {
+        if (item && item.id) unique.set(item.id, item);
+      }
+      return Array.from(unique.values());
+    };
+
     const merged = {
       ...current,
       profiles: mergeCollection(current.profiles, payload.profiles),
@@ -240,7 +300,7 @@ export async function POST(request: Request) {
       assignments: mergeCollection(current.assignments, payload.assignments),
       tomCards: mergeCollection(current.tomCards, payload.tomCards),
       evidenceFiles: mergeCollection(current.evidenceFiles, payload.evidenceFiles),
-      dailyLogs: mergeCollection(current.dailyLogs, payload.dailyLogs),
+      dailyLogs: mergeDailyLogs(current.dailyLogs, payload.dailyLogs),
       fuelTransactions: mergeCollection(current.fuelTransactions, payload.fuelTransactions),
       anomalyAlerts: mergeCollection(current.anomalyAlerts, payload.anomalyAlerts),
       auditEvents: mergeCollection(current.auditEvents, payload.auditEvents),

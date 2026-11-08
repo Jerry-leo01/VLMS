@@ -75,6 +75,35 @@ describe('Staff Transaction & Daily Log Cloud Synchronization', () => {
     expect(json.log.distance_travelled_km).toBe(50);
   });
 
+  it('successfully handles decimal odometer reading (e.g. 92717.3) without integer syntax error on daily log', async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const req = new Request('http://localhost:3000/api/staff/daily-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vehicleId: testVehicleId,
+        userId: testUserId,
+        logDate: today,
+        closingOdometerKm: 92717.3,
+        distanceTravelledKm: 52.8,
+        sourceUnit: 'km',
+        sourceReading: 92717.3,
+        evidenceId: 'ev-test-decimal-daily',
+        notes: 'Odometer reading with fractional tenths from instrument cluster.',
+      }),
+    });
+
+    const res = await staffDailyLogHandler(req);
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.success).toBe(true);
+    expect(json.log).toBeDefined();
+    // Integer column in Postgres receives sanitized round number
+    expect(json.log.closing_odometer_km).toBe(92717);
+    expect(json.log.closingOdometerKm).toBe(92717.3);
+    expect(json.log.source_reading).toBe(92717.3);
+  });
+
   it('successfully commits a staff fuel transaction via API with decoupled evidence IDs', async () => {
     const odoEvId = 'ev-odo-test-123';
     const recEvId = 'ev-rec-test-456';

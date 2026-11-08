@@ -32,6 +32,7 @@ export default function EvidenceGalleryPage() {
   useEffect(() => {
     async function loadData() {
       try {
+        await VLMSService.syncWithServer().catch(() => {});
         const items = await VLMSService.getEvidenceGallery();
         setGallery(items);
 

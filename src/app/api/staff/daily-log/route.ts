@@ -18,6 +18,9 @@ export async function POST(request: Request) {
       logDate,
       closingOdometerKm,
       distanceTravelledKm = 0,
+      sourceUnit = 'km',
+      sourceReading,
+      evidenceId,
       notes,
     } = body;
 
@@ -29,15 +32,21 @@ export async function POST(request: Request) {
     }
 
     const logId = isValidUuid(id) ? id : crypto.randomUUID();
-    const parsedOdometer = Number(closingOdometerKm) || 0;
-    const parsedDistance = Number(distanceTravelledKm) || 0;
+    const rawOdometerNum = Number(closingOdometerKm);
+    const parsedOdometer = isNaN(rawOdometerNum) ? 0 : rawOdometerNum;
+    const roundedOdometer = Math.round(parsedOdometer);
+
+    const rawDistanceNum = Number(distanceTravelledKm);
+    const parsedDistance = isNaN(rawDistanceNum) ? 0 : rawDistanceNum;
+    const roundedDistance = Math.round(parsedDistance);
+
     const todayDate = logDate || new Date().toISOString().split('T')[0];
     const nowIso = new Date().toISOString();
 
     const supabase = getSupabaseAdmin();
 
     if (supabase) {
-      // 1. Insert or update daily_logs in Supabase
+      // 1. Insert or update daily_logs in Supabase (sanitize integer columns)
       const { error: logErr } = await supabase.from('daily_logs').upsert(
         {
           id: logId,
@@ -45,8 +54,8 @@ export async function POST(request: Request) {
           user_id: userId,
           assignment_id: isValidUuid(assignmentId) ? assignmentId : null,
           log_date: todayDate,
-          closing_odometer_km: parsedOdometer,
-          distance_travelled_km: parsedDistance,
+          closing_odometer_km: roundedOdometer,
+          distance_travelled_km: roundedDistance,
           notes: notes || null,
           status: 'submitted',
           updated_at: nowIso,
@@ -63,13 +72,13 @@ export async function POST(request: Request) {
       }
 
       // 2. Insert into odometer_readings
-      if (parsedOdometer > 0) {
+      if (roundedOdometer > 0) {
         try {
           await supabase.from('odometer_readings').insert({
             id: crypto.randomUUID(),
             vehicle_id: vehicleId,
             user_id: userId,
-            reading_km: parsedOdometer,
+            reading_km: roundedOdometer,
             reading_type: 'daily_close',
             reading_timestamp: nowIso,
             source: 'driver_entry',
@@ -86,10 +95,10 @@ export async function POST(request: Request) {
           .eq('id', vehicleId)
           .maybeSingle();
 
-        if (v && (v.current_odometer_km === null || parsedOdometer > v.current_odometer_km)) {
+        if (v && (v.current_odometer_km === null || roundedOdometer > v.current_odometer_km)) {
           await supabase
             .from('vehicles')
-            .update({ current_odometer_km: parsedOdometer, updated_at: nowIso })
+            .update({ current_odometer_km: roundedOdometer, updated_at: nowIso })
             .eq('id', vehicleId);
         }
       }
@@ -106,9 +115,12 @@ export async function POST(request: Request) {
         date: todayDate,
         business_date: todayDate,
         odometer_km: parsedOdometer,
-        closing_odometer_km: parsedOdometer,
+        closing_odometer_km: roundedOdometer,
         distance_travelled_km: parsedDistance,
         mileage_difference_km: parsedDistance,
+        source_unit: sourceUnit,
+        source_reading: sourceReading !== undefined && sourceReading !== null ? Number(sourceReading) : parsedOdometer,
+        evidence_id: evidenceId || null,
         comment: notes || null,
         status: 'submitted',
         submitted_at: nowIso,
@@ -137,9 +149,19 @@ export async function POST(request: Request) {
           date: todayDate,
           business_date: todayDate,
           odometer_km: parsedOdometer,
-          closing_odometer_km: parsedOdometer,
+          odometerKm: parsedOdometer,
+          closing_odometer_km: roundedOdometer,
+          closingOdometerKm: parsedOdometer,
           distance_travelled_km: parsedDistance,
+          distanceTravelledKm: parsedDistance,
           mileage_difference_km: parsedDistance,
+          mileageDifferenceKm: parsedDistance,
+          source_unit: sourceUnit,
+          sourceUnit: sourceUnit,
+          source_reading: sourceReading !== undefined && sourceReading !== null ? Number(sourceReading) : parsedOdometer,
+          sourceReading: sourceReading !== undefined && sourceReading !== null ? Number(sourceReading) : parsedOdometer,
+          evidence_id: evidenceId || null,
+          evidenceId: evidenceId || null,
           comment: notes || null,
           status: 'submitted',
           submitted_at: nowIso,

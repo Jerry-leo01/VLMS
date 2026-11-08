@@ -55,6 +55,7 @@ export default function DailyLogSubmissionPage() {
   useEffect(() => {
     async function init() {
       try {
+        await VLMSService.syncWithServer().catch(() => {});
         const supabase = createClient();
         const { data: authData } = await supabase.auth.getUser();
 

@@ -101,6 +101,7 @@ export default function FuelPurchasePage() {
   useEffect(() => {
     async function loadData() {
       try {
+        await VLMSService.syncWithServer().catch(() => {});
         const supabase = createClient();
         const { data: authData } = await supabase.auth.getUser();
 

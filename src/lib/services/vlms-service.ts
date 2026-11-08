@@ -137,12 +137,26 @@ function mergeStoreFromData(parsed: Partial<DataStore>): void {
   }
   if (Array.isArray(parsed.evidenceFiles)) {
     const map = new Map(store.evidenceFiles.map((e) => [e.id, e]));
-    for (const e of parsed.evidenceFiles) map.set(e.id, e);
+    for (const e of parsed.evidenceFiles) {
+      const prev = map.get(e.id);
+      const merged = { ...(prev || {}), ...e };
+      if (!merged.data_url && prev?.data_url) {
+        merged.data_url = prev.data_url;
+      }
+      map.set(e.id, merged);
+    }
     store.evidenceFiles = Array.from(map.values());
   }
   if (Array.isArray(parsed.dailyLogs)) {
     const map = new Map(store.dailyLogs.map((l) => [l.id, l]));
-    for (const l of parsed.dailyLogs) map.set(l.id, l);
+    const dateMap = new Map(store.dailyLogs.map((l) => [`${l.vehicle_id}_${l.business_date || (l as any).date}`, l]));
+    for (const l of parsed.dailyLogs) {
+      const dateKey = `${l.vehicle_id}_${l.business_date || (l as any).date}`;
+      const prev = map.get(l.id) || dateMap.get(dateKey);
+      const merged = { ...(prev || {}), ...l };
+      map.set(l.id, merged);
+      dateMap.set(dateKey, merged);
+    }
     store.dailyLogs = Array.from(map.values());
   }
   if (Array.isArray(parsed.fuelTransactions)) {
@@ -847,7 +861,9 @@ export const VLMSService = {
   async getTodayLog(vehicleId: string): Promise<DailyLog | undefined> {
     syncFromLocalStorage();
     const today = getBusinessDate();
-    const log = store.dailyLogs.find((l) => l.vehicle_id === vehicleId && l.business_date === today);
+    const log = store.dailyLogs.find(
+      (l) => l.vehicle_id === vehicleId && (l.business_date === today || (l as any).date === today)
+    );
     if (!log) return undefined;
     const evidence = store.evidenceFiles.find((e) => e.id === log.evidence_id);
     const vehicle = store.vehicles.find((v) => v.id === log.vehicle_id);
@@ -987,6 +1003,9 @@ export const VLMSService = {
             logDate: today,
             closingOdometerKm: canonicalKm,
             distanceTravelledKm: deltaKm,
+            sourceUnit: sourceUnit,
+            sourceReading: rawSourceReading,
+            evidenceId: input.evidenceId,
             notes: input.comment,
           }),
         });
