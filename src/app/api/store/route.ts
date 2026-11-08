@@ -27,6 +27,7 @@ export async function GET() {
         { data: anomalies },
         { data: auditEvents },
         { data: offices },
+        { data: cloudEvidenceFiles },
       ] = await Promise.all([
         supabase.from('profiles').select('*'),
         supabase.from('user_roles').select('*'),
@@ -38,6 +39,7 @@ export async function GET() {
         supabase.from('anomaly_alerts').select('*'),
         supabase.from('audit_events').select('*'),
         supabase.from('offices').select('*'),
+        supabase.from('evidence_files').select('*'),
       ]);
 
       const formattedUserRoles = (roles || []).map((r: any) => ({
@@ -119,6 +121,32 @@ export async function GET() {
         };
       });
 
+      // Enrich evidence files combining Supabase cloud ledger and local cache
+      const localEvidenceMap = new Map((localStore?.evidenceFiles || []).map((e: any) => [e.id, e]));
+      const normalizedEvidenceFiles = (cloudEvidenceFiles || []).map((e: any) => {
+        const localMatch: any = localEvidenceMap.get(e.id);
+        return {
+          id: e.id,
+          storage_bucket: e.storage_bucket || 'vlms-evidence',
+          storage_path: e.storage_path,
+          evidence_type: e.evidence_type,
+          sha256_hash: e.sha256_hash,
+          captured_at: e.captured_at,
+          uploaded_at: e.uploaded_at,
+          mime_type: e.mime_type,
+          file_size_bytes: Number(e.file_size_bytes || 0),
+          is_verified: e.is_verified,
+          data_url: localMatch?.data_url || null,
+          metadata: localMatch?.metadata || null,
+        };
+      });
+
+      for (const [id, localEv] of localEvidenceMap.entries()) {
+        if (!normalizedEvidenceFiles.some((e: any) => e.id === id)) {
+          normalizedEvidenceFiles.push(localEv as any);
+        }
+      }
+
       const cloudStore = {
         offices: offices && offices.length > 0 ? offices : DEFAULT_OFFICES,
         profiles: profiles || [],
@@ -126,7 +154,7 @@ export async function GET() {
         vehicles: vehicles || [],
         assignments: assignments || [],
         tomCards: tomCards || [],
-        evidenceFiles: localStore?.evidenceFiles || [],
+        evidenceFiles: normalizedEvidenceFiles,
         dailyLogs: enrichedDailyLogs,
         fuelTransactions: enrichedFuelTxs,
         anomalyAlerts: anomalies || [],

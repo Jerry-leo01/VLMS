@@ -4,9 +4,11 @@ import React, { useState } from 'react';
 import { User, Image as ImageIcon } from 'lucide-react';
 import { formatOdometer } from '@/lib/utils';
 
-export interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
+export interface SafeImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
+  src?: string | null;
   fallbackType?: 'avatar' | 'evidence';
   initials?: string;
+  evidenceId?: string;
   telemetry?: {
     odoKm?: number;
     plateNumber?: string;
@@ -19,15 +21,54 @@ export function SafeImage({
   alt = '',
   fallbackType = 'evidence',
   initials,
+  evidenceId,
   telemetry,
   className = '',
   containerClassName = '',
   ...props
 }: SafeImageProps) {
-  const [hasError, setHasError] = useState(!src);
-  const [isLoading, setIsLoading] = useState(Boolean(src));
+  const [resolvedSrc, setResolvedSrc] = useState<string | null>(
+    typeof src === 'string' && src ? src : null
+  );
+  const [hasError, setHasError] = useState(!src && !evidenceId);
+  const [isLoading, setIsLoading] = useState(Boolean(src || evidenceId));
 
-  if (hasError || !src) {
+  React.useEffect(() => {
+    if (typeof src === 'string' && src) {
+      setResolvedSrc(src);
+      setHasError(false);
+      setIsLoading(true);
+      return;
+    }
+
+    if (evidenceId && !src) {
+      let isMounted = true;
+      setIsLoading(true);
+      fetch(`/api/evidence/${encodeURIComponent(evidenceId)}/url`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!isMounted) return;
+          if (data?.signedUrl) {
+            setResolvedSrc(data.signedUrl);
+            setHasError(false);
+          } else {
+            setHasError(true);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setHasError(true);
+        })
+        .finally(() => {
+          if (isMounted) setIsLoading(false);
+        });
+
+      return () => {
+        isMounted = false;
+      };
+    }
+  }, [src, evidenceId]);
+
+  if (hasError || !resolvedSrc) {
     if (fallbackType === 'avatar') {
       return (
         <div
@@ -81,7 +122,7 @@ export function SafeImage({
       )}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={src}
+        src={resolvedSrc || undefined}
         alt={alt}
         loading="lazy"
         decoding="async"

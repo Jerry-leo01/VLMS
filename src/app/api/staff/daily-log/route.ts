@@ -56,6 +56,7 @@ export async function POST(request: Request) {
           log_date: todayDate,
           closing_odometer_km: roundedOdometer,
           distance_travelled_km: roundedDistance,
+          closing_evidence_file_id: isValidUuid(evidenceId) ? evidenceId : null,
           notes: notes || null,
           status: 'submitted',
           updated_at: nowIso,

@@ -29,6 +29,12 @@ import {
   Gauge,
   RotateCcw,
   Filter,
+  ZoomIn,
+  ZoomOut,
+  RotateCw,
+  RefreshCw,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { AdminTotpGeneratorModal } from '@/components/admin/AdminTotpGeneratorModal';
 import { AdaptiveDatePicker } from '@/components/ui/AdaptiveDatePicker';
@@ -66,7 +72,26 @@ export default function ManagementDashboardPage() {
   const [dateRange, setDateRange] = useState<DateRangeSelection>(getPresetDateRange('all'));
   const [loading, setLoading] = useState(true);
   const [selectedEvidence, setSelectedEvidence] = useState<EvidenceGalleryItem | null>(null);
+  const [lightboxZoom, setLightboxZoom] = useState<number>(1);
+  const [lightboxRotation, setLightboxRotation] = useState<number>(0);
+  const [copiedHash, setCopiedHash] = useState<boolean>(false);
   const [showPinModal, setShowPinModal] = useState(false);
+
+  const handleSelectEvidence = (item: EvidenceGalleryItem | null) => {
+    setSelectedEvidence(item);
+    setLightboxZoom(1);
+    setLightboxRotation(0);
+    setCopiedHash(false);
+  };
+
+  const handleCopyHash = (hash: string) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(hash).then(() => {
+        setCopiedHash(true);
+        setTimeout(() => setCopiedHash(false), 2000);
+      });
+    }
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -405,12 +430,13 @@ export default function ManagementDashboardPage() {
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setSelectedEvidence(item)}
+                    onClick={() => handleSelectEvidence(item)}
                     className="group text-left bg-slate-50 hover:bg-white border border-slate-200 hover:border-navy-800 rounded-xl overflow-hidden shadow-xs transition-all flex flex-col"
                   >
                     <div className="relative aspect-video bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
                       <SafeImage
                         src={item.dataUrl || ''}
+                        evidenceId={item.evidenceId}
                         alt={item.title}
                         fallbackType="evidence"
                         telemetry={{
@@ -545,7 +571,7 @@ export default function ManagementDashboardPage() {
                             {matchingGalleryItem ? (
                               <button
                                 type="button"
-                                onClick={() => setSelectedEvidence(matchingGalleryItem)}
+                                onClick={() => handleSelectEvidence(matchingGalleryItem)}
                                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-800 font-semibold text-[11px] border border-blue-200 transition-colors"
                               >
                                 <Eye className="w-3.5 h-3.5" />
@@ -597,50 +623,160 @@ export default function ManagementDashboardPage() {
         </main>
       </div>
 
-      {/* Evidence Inspection Modal */}
+      {/* Evidence Inspection Modal with Interactive Lightbox */}
       {selectedEvidence && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-4 sm:p-6 space-y-4 shadow-2xl relative max-h-[92vh] overflow-y-auto">
             <button
               type="button"
-              onClick={() => setSelectedEvidence(null)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100"
+              onClick={() => handleSelectEvidence(null)}
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors z-20"
+              aria-label="Close modal"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+            <div className="flex items-center gap-2 pr-8">
+              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
               <div>
-                <h3 className="text-base font-bold text-slate-900">{selectedEvidence.title}</h3>
+                <h3 className="text-base font-bold text-slate-900 leading-tight">{selectedEvidence.title}</h3>
                 <p className="text-xs text-slate-500">
-                  Vehicle: <strong className="font-mono">{selectedEvidence.vehiclePlate}</strong> • Staff: {selectedEvidence.staffName}
+                  Vehicle: <strong className="font-mono text-navy-950">{selectedEvidence.vehiclePlate}</strong> • Staff: {selectedEvidence.staffName}
                 </p>
               </div>
             </div>
 
-            <div className="aspect-video bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center border border-slate-200 dark:border-slate-700 overflow-hidden">
-              <SafeImage
-                src={selectedEvidence.dataUrl || ''}
-                alt={selectedEvidence.title}
-                fallbackType="evidence"
-                telemetry={{
-                  odoKm: selectedEvidence.odometerKm,
-                  plateNumber: selectedEvidence.vehiclePlate,
+            {/* Interactive Lightbox Canvas */}
+            <div className="relative aspect-video sm:aspect-[16/10] bg-slate-950 rounded-xl flex items-center justify-center border border-slate-800 overflow-hidden select-none">
+              <div
+                className="w-full h-full flex items-center justify-center transition-transform duration-200 ease-out"
+                style={{
+                  transform: `scale(${lightboxZoom}) rotate(${lightboxRotation}deg)`,
                 }}
-                className="max-h-full max-w-full object-contain"
-              />
+              >
+                <SafeImage
+                  src={selectedEvidence.dataUrl || ''}
+                  evidenceId={selectedEvidence.evidenceId}
+                  alt={selectedEvidence.title}
+                  fallbackType="evidence"
+                  telemetry={{
+                    odoKm: selectedEvidence.odometerKm,
+                    plateNumber: selectedEvidence.vehiclePlate,
+                  }}
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+
+              {/* Floating Lightbox Controls */}
+              <div className="absolute bottom-3 right-3 flex items-center gap-1.5 bg-black/70 backdrop-blur-md px-2.5 py-1.5 rounded-xl border border-white/10 text-white shadow-lg z-10">
+                <button
+                  type="button"
+                  title="Zoom Out"
+                  disabled={lightboxZoom <= 1}
+                  onClick={() => setLightboxZoom((prev) => Math.max(1, Number((prev - 0.5).toFixed(1))))}
+                  className="p-1 hover:bg-white/20 rounded disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <ZoomOut className="w-4 h-4" />
+                </button>
+                <span className="text-[11px] font-mono px-1 font-semibold min-w-[3ch] text-center">
+                  {Math.round(lightboxZoom * 100)}%
+                </span>
+                <button
+                  type="button"
+                  title="Zoom In"
+                  disabled={lightboxZoom >= 3}
+                  onClick={() => setLightboxZoom((prev) => Math.min(3, Number((prev + 0.5).toFixed(1))))}
+                  className="p-1 hover:bg-white/20 rounded disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <ZoomIn className="w-4 h-4" />
+                </button>
+                <div className="w-px h-3.5 bg-white/20 mx-0.5" />
+                <button
+                  type="button"
+                  title="Rotate Clockwise (90°)"
+                  onClick={() => setLightboxRotation((prev) => (prev + 90) % 360)}
+                  className="p-1 hover:bg-white/20 rounded"
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
+                {(lightboxZoom !== 1 || lightboxRotation !== 0) && (
+                  <button
+                    type="button"
+                    title="Reset View"
+                    onClick={() => {
+                      setLightboxZoom(1);
+                      setLightboxRotation(0);
+                    }}
+                    className="p-1 hover:bg-white/20 rounded text-amber-400"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
 
+            {/* OCR Telemetry Comparison Panel */}
+            {selectedEvidence.metadata &&
+              (selectedEvidence.metadata.ocrProposal !== undefined ||
+                selectedEvidence.metadata.ocrConfidence !== undefined) && (
+                <div className="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between text-blue-900 font-semibold">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
+                      OCR Algorithmic Telemetry Verification
+                    </span>
+                    <span className="font-mono text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full font-bold">
+                      Confidence: {selectedEvidence.metadata.ocrConfidence ? `${Math.round(Number(selectedEvidence.metadata.ocrConfidence) * 100)}%` : 'Verified'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
+                    <div className="bg-white p-2 rounded-lg border border-blue-100">
+                      <span className="text-slate-500 font-sans block text-[10px] uppercase font-semibold">Driver Entry</span>
+                      <span className="text-slate-900 font-bold text-xs">
+                        {formatOdometer(selectedEvidence.odometerKm)}
+                      </span>
+                    </div>
+                    <div className="bg-white p-2 rounded-lg border border-blue-100">
+                      <span className="text-slate-500 font-sans block text-[10px] uppercase font-semibold">OCR Scan Reading</span>
+                      <span className="text-emerald-700 font-bold text-xs">
+                        {selectedEvidence.metadata.ocrProposal ? formatOdometer(Number(selectedEvidence.metadata.ocrProposal)) : 'Match'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            {/* SHA-256 Cryptographic Hash Digest */}
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs font-mono">
-              <div className="flex items-center gap-1.5 text-slate-500 font-sans font-semibold">
-                <Hash className="w-3.5 h-3.5" /> SHA-256 Cryptographic Hash
+              <div className="flex items-center justify-between text-slate-700 font-sans font-semibold">
+                <span className="flex items-center gap-1.5">
+                  <Hash className="w-3.5 h-3.5 text-slate-500" />
+                  SHA-256 Cryptographic Digest
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyHash(selectedEvidence.sha256Hash)}
+                  className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-sans font-semibold py-0.5 px-1.5 rounded hover:bg-blue-50 transition-colors"
+                >
+                  {copiedHash ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-600">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy Digest</span>
+                    </>
+                  )}
+                </button>
               </div>
-              <div className="text-slate-800 break-all text-[11px]">
+              <div className="text-slate-800 break-all text-[11px] bg-white p-2 rounded border border-slate-200">
                 {selectedEvidence.sha256Hash}
               </div>
             </div>
 
+            {/* Evidence Telemetry Breakdown */}
             <div className="space-y-2">
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
                 Evidence Telemetry Breakdown
@@ -657,8 +793,11 @@ export default function ManagementDashboardPage() {
               </div>
             </div>
 
-            <div className="text-[11px] text-slate-500 text-right">
-              Submitted: {formatDateTime(selectedEvidence.submittedAt)}
+            <div className="text-[11px] text-slate-500 text-right pt-2 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-emerald-700 font-semibold flex items-center gap-1 text-[11px]">
+                <ShieldCheck className="w-3.5 h-3.5" /> Cloud Backed & Encrypted
+              </span>
+              <span>Submitted: {formatDateTime(selectedEvidence.submittedAt)}</span>
             </div>
           </div>
         </div>

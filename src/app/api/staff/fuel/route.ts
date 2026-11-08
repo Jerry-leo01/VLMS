@@ -63,6 +63,8 @@ export async function POST(request: Request) {
           current_odometer_km: roundedOdometer,
           source_unit: sourceUnit === 'mi' ? 'mi' : 'km',
           source_reading: sourceReading !== undefined && sourceReading !== null ? Number(sourceReading) : parsedOdometer,
+          odometer_evidence_id: isValidUuid(odometerEvidenceId) ? odometerEvidenceId : null,
+          receipt_evidence_id: isValidUuid(receiptEvidenceId) ? receiptEvidenceId : null,
           status: 'confirmed',
           created_at: txDate,
         },

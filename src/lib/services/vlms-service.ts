@@ -214,16 +214,43 @@ function syncFromLocalStorage(): void {
   }
 }
 
+function generateUuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const parts = dataUrl.split(',');
+  const mimeMatch = parts[0].match(/:(.*?);/);
+  const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+  const bstr = atob(parts[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+}
+
 function persistToLocalStorage(): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
     // Asynchronously dispatch to server API route for cross-device persistence
     if (isBrowserRuntime()) {
-      // Retain active evidence files with their dataUrls so images sync seamlessly across devices
+      // Retain active evidence files; strip heavy data_url if cloud storage_path exists to prevent exceeding Vercel 4.5MB request limit
       const sanitizedStore = {
         ...store,
-        evidenceFiles: store.evidenceFiles.slice(-30),
+        evidenceFiles: store.evidenceFiles.slice(-30).map((e) => ({
+          ...e,
+          data_url: e.storage_path ? null : e.data_url,
+        })),
       };
       fetch('/api/store', {
         method: 'POST',
@@ -232,7 +259,19 @@ function persistToLocalStorage(): void {
       }).catch(() => {});
     }
   } catch {
-    // Handle storage quota gracefully
+    // Handle storage quota gracefully by stripping large data URLs from cache
+    try {
+      const lightweightStore = {
+        ...store,
+        evidenceFiles: store.evidenceFiles.slice(-20).map((e) => ({
+          ...e,
+          data_url: null,
+        })),
+      };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(lightweightStore));
+    } catch {
+      // Safe fallback
+    }
   }
 }
 
@@ -1265,7 +1304,7 @@ export const VLMSService = {
     return { transaction: newTx, anomalies: generatedAlerts };
   },
 
-  // Save Evidence File (including captured base64 dataUrl so photos render on Admin Dashboard)
+  // Save Evidence File (including cloud streaming to Supabase Storage and fallback caching)
   async saveEvidenceFile(fileData: {
     evidenceType: 'daily_odometer' | 'fuel_odometer' | 'fuel_receipt' | 'other';
     sha256Hash: string;
@@ -1275,11 +1314,42 @@ export const VLMSService = {
     metadata?: Record<string, unknown>;
   }): Promise<EvidenceFile> {
     syncFromLocalStorage();
-    const id = `ev-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const id = generateUuid();
+    let storagePath = `evidence/${fileData.evidenceType}/${id}.jpg`;
+
+    // Stream binary image directly to Cloud Storage endpoint when running in browser
+    if (isBrowserRuntime() && fileData.dataUrl) {
+      try {
+        const blob = dataUrlToBlob(fileData.dataUrl);
+        const formData = new FormData();
+        formData.append('id', id);
+        formData.append('file', blob, `${id}.jpg`);
+        formData.append('evidenceType', fileData.evidenceType);
+        formData.append('sha256Hash', fileData.sha256Hash);
+        if (fileData.metadata) {
+          formData.append('metadata', JSON.stringify(fileData.metadata));
+        }
+
+        const uploadRes = await fetch('/api/evidence/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (uploadRes.ok) {
+          const result = await uploadRes.json();
+          if (result.success && result.evidence?.storage_path) {
+            storagePath = result.evidence.storage_path;
+          }
+        }
+      } catch (uploadErr) {
+        console.warn('Asynchronous cloud evidence upload warning:', uploadErr);
+      }
+    }
+
     const newEvidence: EvidenceFile = {
       id,
       storage_bucket: 'vlms-evidence',
-      storage_path: `evidence/${fileData.evidenceType}/${id}.jpg`,
+      storage_path: storagePath,
       data_url: fileData.dataUrl ?? null,
       evidence_type: fileData.evidenceType,
       sha256_hash: fileData.sha256Hash,
@@ -1409,6 +1479,36 @@ export const VLMSService = {
             reading: tx.odometer_km,
           },
         });
+      }
+    }
+
+    // Hydrate gallery with ephemeral signed URLs from cloud storage when running in browser
+    if (isBrowserRuntime() && gallery.length > 0) {
+      try {
+        const evidenceIdsToResolve = gallery
+          .map((item) => item.evidenceId)
+          .filter((id): id is string => Boolean(id) && typeof id === 'string');
+
+        if (evidenceIdsToResolve.length > 0) {
+          const res = await fetch('/api/evidence/batch-urls', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: evidenceIdsToResolve }),
+          });
+
+          if (res.ok) {
+            const json = await res.json();
+            if (json.success && json.urls) {
+              for (const item of gallery) {
+                if (item.evidenceId && json.urls[item.evidenceId]) {
+                  item.dataUrl = json.urls[item.evidenceId];
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Non-blocking fallback to local cached images or telemetry cards
       }
     }
 
